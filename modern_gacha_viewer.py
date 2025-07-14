@@ -416,8 +416,8 @@ class GachaAPI:
     END_DEFAULT = "getGachaLog"
     END_COLLABORATION = "getLdGachaLog"
     
-    # 실제로는 콜라보 배너가 특별한 엔드포인트를 사용하지 않을 수도 있음
-    COLLABORATION_TYPES = {"12"}  # 실제 콜라보 배너 타입으로 수정
+    # Rust 코드에서 확인된 콜라보 배너 타입들
+    COLLABORATION_TYPES = {"21", "22"}  # 실제 콜라보 배너 타입
     
     def __init__(self, gacha_url: str):
         self.gacha_url = gacha_url
@@ -431,16 +431,17 @@ class GachaAPI:
             self.base_params[key] = value[0] if isinstance(value, list) and len(value) > 0 else value
     
     def _build_url_for_gacha_type(self, gacha_type: str) -> str:
-        """가챠 타입에 따라 URL 엔드포인트 결정 - 실제로는 대부분 getGachaLog 사용"""
-        # 대부분의 배너는 기본 엔드포인트 사용
-        # 특별한 경우에만 getLdGachaLog 사용 (실제 확인 필요)
+        """가챠 타입에 따라 URL 엔드포인트 결정 - 콜라보 배너는 특별 엔드포인트 사용 가능"""
+        # 콜라보 배너는 특별한 엔드포인트를 사용할 수 있음
         if gacha_type in self.COLLABORATION_TYPES:
+            # 먼저 콜라보 엔드포인트 시도, 실패하면 기본 엔드포인트 사용
             return self.base_url.replace(self.END_DEFAULT, self.END_COLLABORATION)
         else:
+            # 일반 배너는 기본 엔드포인트 사용
             return self.base_url.replace(self.END_COLLABORATION, self.END_DEFAULT)
     
     async def fetch_gacha_records(self, gacha_type: str, lang: str = "ko") -> List[Dict[str, Any]]:
-        """특정 배너의 가챠 기록을 모두 가져오기 - GitHub 구조 참고"""
+        """특정 배너의 가챠 기록을 모두 가져오기 - 콜라보 배너 지원"""
         all_records = []
         page = 1
         end_id = "0"
@@ -449,49 +450,72 @@ class GachaAPI:
         request_url = self._build_url_for_gacha_type(gacha_type)
         
         async with aiohttp.ClientSession() as session:
-            while True:
-                params = self.base_params.copy()
-                params.update({
-                    "gacha_type": gacha_type,
-                    "page": str(page),
-                    "size": "20",
-                    "end_id": end_id,
-                    "lang": lang
-                })
+            # 콜라보 배너의 경우 두 가지 엔드포인트 모두 시도
+            urls_to_try = [request_url]
+            if gacha_type in self.COLLABORATION_TYPES:
+                # 기본 엔드포인트도 추가로 시도
+                fallback_url = self.base_url.replace(self.END_COLLABORATION, self.END_DEFAULT)
+                if fallback_url != request_url:
+                    urls_to_try.append(fallback_url)
+            
+            for url_to_try in urls_to_try:
+                page = 1
+                end_id = "0"
+                all_records = []
                 
-                try:
-                    async with session.get(request_url, params=params, timeout=30) as response:
-                        if response.status != 200:
-                            print(f"HTTP 오류: {response.status}")
-                            break
+                print(f"🔗 URL 시도: {url_to_try.split('/')[-1]} (gacha_type={gacha_type})")
+                
+                while True:
+                    params = self.base_params.copy()
+                    params.update({
+                        "gacha_type": gacha_type,
+                        "page": str(page),
+                        "size": "20",
+                        "end_id": end_id,
+                        "lang": lang
+                    })
+                    
+                    try:
+                        async with session.get(url_to_try, params=params, timeout=30) as response:
+                            if response.status != 200:
+                                print(f"HTTP 오류: {response.status}")
+                                break
+                                
+                            data = await response.json()
                             
-                        data = await response.json()
+                            if data.get("retcode") != 0:
+                                print(f"API 오류: retcode={data.get('retcode')}, message={data.get('message', 'Unknown error')}")
+                                break
                         
-                        if data.get("retcode") != 0:
-                            print(f"API 오류: {data.get('message', 'Unknown error')}")
-                            break
+                            records = data.get("data", {}).get("list", [])
+                            if not records:
+                                print(f"더 이상 데이터 없음 - 총 {len(all_records)}개 기록")
+                                break
                         
-                        records = data.get("data", {}).get("list", [])
-                        if not records:
-                            break
+                            all_records.extend(records)
                         
-                        all_records.extend(records)
+                            # 다음 페이지 준비
+                            end_id = records[-1].get("id", "0")
+                            page += 1
                         
-                        # 다음 페이지 준비
-                        end_id = records[-1].get("id", "0")
-                        page += 1
+                            print(f"배너 {gacha_type} - 페이지 {page-1}: {len(records)}개 기록 (누적: {len(all_records)}개)")
                         
-                        print(f"배너 {gacha_type} - 페이지 {page-1}: {len(records)}개 기록")
+                            # API 호출 간격 (과부하 방지)
+                            await asyncio.sleep(0.5)
                         
-                        # API 호출 간격 (과부하 방지)
-                        await asyncio.sleep(0.5)
-                        
-                except asyncio.TimeoutError:
-                    print(f"타임아웃 발생 - 페이지 {page}")
+                    except asyncio.TimeoutError:
+                        print(f"타임아웃 발생 - 페이지 {page}")
+                        break
+                    except Exception as e:
+                        print(f"요청 오류 - 페이지 {page}: {e}")
+                        break
+                
+                # 데이터를 성공적으로 가져왔으면 중단
+                if all_records:
+                    print(f"✅ {url_to_try.split('/')[-1]}에서 성공: {len(all_records)}개 기록")
                     break
-                except Exception as e:
-                    print(f"요청 오류 - 페이지 {page}: {e}")
-                    break
+                else:
+                    print(f"❌ {url_to_try.split('/')[-1]}에서 실패")
         
         return all_records
     
@@ -550,13 +574,15 @@ class ModernGachaViewer:
             print(f"아이콘 로드 실패: {e}")
         
         # 데이터 저장용 - 콜라보 워프 광추 배너 추가
-        # 실제 스타레일 API 배너 타입에 맞게 수정
+        # 실제 스타레일 API 배너 타입에 맞게 수정 - 전체 배너 포함
+        # 실제 API 응답 패턴에 맞게 배너 이름 수정
         self.banner_data = {
-            "1": {"name": "이벤트 배너", "data": [], "stats": {}},      # 캐릭터 이벤트
-            "2": {"name": "광추 배너", "data": [], "stats": {}},        # 무기 배너
-            "3": {"name": "상시 배너", "data": [], "stats": {}},        # 상시 배너
-            "11": {"name": "초보 배너", "data": [], "stats": {}},       # 초보자 배너 (50뽑 할인)
-            "12": {"name": "콜라보 워프", "data": [], "stats": {}}      # 콜라보 이벤트 (있다면)
+            "1": {"name": "상시 배너", "data": [], "stats": {}},          # 상시 배너 (실제 API gacha_type=1)
+            "2": {"name": "광추 배너", "data": [], "stats": {}},          # 무기 배너 (실제 API gacha_type=2)
+            "3": {"name": "이벤트 배너", "data": [], "stats": {}},        # 캐릭터 이벤트 배너 (실제 API gacha_type=3)
+            "11": {"name": "이벤트 배너 (한정)", "data": [], "stats": {}}, # 한정 이벤트 배너 (실제 API gacha_type=11)
+            "21": {"name": "콜라보 배너", "data": [], "stats": {}},       # 콜라보 이벤트 배너 (실제 API gacha_type=21)
+            "22": {"name": "콜라보 광추", "data": [], "stats": {}}        # 콜라보 광추 배너 (실제 API gacha_type=22)
         }
         
         # 에러 핸들러 추가
@@ -885,16 +911,17 @@ class ModernGachaViewer:
         print(f"✅ 검증 성공")
     
     async def _fetch_banners_data(self, gacha_link: str, api_lang: str):
-        """배너별 데이터 조회 - 실제 API 배너 타입 사용"""
-        # 기본 배너들만 먼저 조회 (1, 2, 3, 11)
-        banner_ids = ["1", "2", "3", "11"]
+        """배너별 데이터 조회 - Rust 코드에서 확인된 실제 배너 타입 사용"""
+        # 기본 배너들 (항상 존재)
+        basic_banner_ids = ["1", "2", "3", "11"]
         
-        # 콜라보 배너 확인을 위해 12도 시도
-        test_banner_ids = ["12"]
+        # 콜라보 배너들 (존재할 수도 있음) - Rust 코드에서 확인된 타입
+        collaboration_banner_ids = ["21", "22"]
         
-        for i, banner_id in enumerate(banner_ids):
+        # 기본 배너 조회
+        for i, banner_id in enumerate(basic_banner_ids):
             banner_name = self.banner_data[banner_id]["name"]
-            self.update_progress(0.2 + (i * 0.18), f"📊 {banner_name} 조회 중...")
+            self.update_progress(0.2 + (i * 0.15), f"📊 {banner_name} 조회 중...")
             
             try:
                 new_data = await self._fetch_banner_data(gacha_link, banner_id, api_lang)
@@ -904,19 +931,21 @@ class ModernGachaViewer:
                 self._update_banner_display(banner_id)
                 
                 total_items = len(self.banner_data[banner_id]["data"])
-                self.update_progress(0.2 + (i * 0.18) + 0.04, 
+                self.update_progress(0.2 + (i * 0.15) + 0.03, 
                     f"📊 {banner_name}: {total_items}개 기록 (+{new_items_added}개 신규)")
                     
             except Exception as e:
                 print(f"❌ {banner_name} 조회 실패: {e}")
                 continue
         
-        # 콜라보 배너 테스트 (있으면 조회, 없으면 무시)
-        for banner_id in test_banner_ids:
+        # 콜라보 배너 조회 (있으면 조회, 없으면 건너뛰기) - 올바른 타입 사용
+        collaboration_progress_start = 0.8
+        for i, banner_id in enumerate(collaboration_banner_ids):
             if banner_id in self.banner_data:
                 try:
                     banner_name = self.banner_data[banner_id]["name"]
-                    print(f"🔍 {banner_name} 존재 여부 확인 중...")
+                    self.update_progress(collaboration_progress_start + (i * 0.05), f"🔍 {banner_name} 확인 중...")
+                    print(f"🔍 {banner_name} (타입 {banner_id}) 존재 여부 확인 중...")
                     
                     new_data = await self._fetch_banner_data(gacha_link, banner_id, api_lang)
                     if new_data:  # 데이터가 있으면 처리
@@ -924,28 +953,44 @@ class ModernGachaViewer:
                         self._calculate_banner_stats(banner_id)
                         self._update_banner_display(banner_id)
                         print(f"✅ {banner_name}: {len(new_data)}개 기록 발견")
+                        self.update_progress(collaboration_progress_start + (i * 0.05) + 0.02, 
+                            f"✅ {banner_name}: {len(new_data)}개 기록 (+{new_items_added}개 신규)")
                     else:
                         print(f"ℹ️ {banner_name}: 기록 없음")
+                        self.update_progress(collaboration_progress_start + (i * 0.05) + 0.02, 
+                            f"ℹ️ {banner_name}: 기록 없음")
                         
                 except Exception as e:
-                    print(f"ℹ️ {banner_name} 배너는 현재 존재하지 않습니다")
+                    print(f"ℹ️ {banner_name} 배너는 현재 존재하지 않습니다: {e}")
+                    self.update_progress(collaboration_progress_start + (i * 0.05) + 0.02, 
+                        f"ℹ️ {banner_name}: 미지원")
                     continue
     
     async def _fetch_banner_data(self, gacha_link: str, banner_id: str, api_lang: str) -> List[Any]:
-        """개별 배너 데이터 조회 - 실제 API 배너 타입 매핑"""
+        """개별 배너 데이터 조회 - Rust 코드에서 확인된 실제 배너 타입 매핑"""
         api = GachaAPI(gacha_link)
         
-        # 실제 스타레일 API 배너 타입 매핑
+        # Rust 코드에서 확인된 실제 스타레일 API 배너 타입 매핑
         banner_type_map = {
-            "1": "1",   # 이벤트 배너 (캐릭터)
+            "1": "1",   # 상시 배너 (실제 데이터 확인됨)
             "2": "2",   # 광추 배너 (무기)
-            "3": "3",   # 상시 배너
-            "11": "11", # 초보자 배너
-            "12": "12"  # 콜라보 배너 (있다면)
+            "3": "3",   # 이벤트 배너 (캐릭터) 
+            "11": "11", # 한정 이벤트 배너 (실제 데이터 확인됨)
+            "21": "21", # 콜라보 이벤트 배너 (Rust 코드에서 확인됨)
+            "22": "22"  # 콜라보 광추 배너 (Rust 코드에서 확인됨)
         }
         
         gacha_type = banner_type_map.get(banner_id, banner_id)
+        print(f"🔍 배너 {banner_id} ({self.banner_data[banner_id]['name']}) -> gacha_type {gacha_type} 조회 시작")
+        
         records = await api.fetch_gacha_records(gacha_type, api_lang)
+        print(f"📊 배너 {banner_id}: {len(records)}개 기록 조회됨")
+        
+        # API 응답에서 실제 gacha_type과 첫 번째 아이템 확인
+        if records:
+            actual_gacha_type = records[0].get("gacha_type", "unknown")
+            first_item_name = records[0].get("name", "unknown")
+            print(f"✅ 실제 API 응답 gacha_type: {actual_gacha_type}, 첫 번째 아이템: {first_item_name}")
         
         # 레코드를 객체로 변환
         converted_records = []
@@ -1548,7 +1593,6 @@ def get_gacha_link_from_powershell_script() -> Optional[str]:
     except Exception as e:
         print(f"❌ PowerShell 스크립트 실행 중 오류: {e}")
         return None
-
 
 if __name__ == "__main__":
     app = ModernGachaViewer()
