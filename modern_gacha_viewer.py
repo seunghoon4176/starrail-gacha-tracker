@@ -439,7 +439,7 @@ class GachaAPI:
         else:
             return self.base_url.replace(self.END_COLLABORATION, self.END_DEFAULT)
     
-    async def fetch_gacha_records(self, gacha_type: str, lang: str = "kr") -> List[Dict[str, Any]]:
+    async def fetch_gacha_records(self, gacha_type: str, lang: str = "ko") -> List[Dict[str, Any]]:
         """특정 배너의 가챠 기록을 모두 가져오기 - GitHub 구조 참고"""
         all_records = []
         page = 1
@@ -496,25 +496,30 @@ class GachaAPI:
         return all_records
     
     async def validate_link(self) -> bool:
-        """가챠 링크 유효성 검증"""
+        """가챠 링크 유효성 검증 - 더 관대한 검증"""
         try:
             async with aiohttp.ClientSession() as session:
-                # 일반 배너로 테스트
-                test_url = self._build_url_for_gacha_type("1")
+                # 일반 배너로 테스트 - 기존 URL 파라미터 그대로 사용
                 params = self.base_params.copy()
                 params.update({
                     "gacha_type": "1",
                     "page": "1",
                     "size": "5",
-                    "end_id": "0",
-                    "lang": "kr"
+                    "end_id": "0"
+                    # lang 파라미터는 기존 것 유지
                 })
                 
-                async with session.get(test_url, params=params, timeout=10) as response:
+                # 기본 URL 사용 (엔드포인트 변경 없이)
+                async with session.get(self.base_url, params=params, timeout=15) as response:
+                    print(f"검증 응답 상태: {response.status}")
+                    
                     if response.status != 200:
                         return False
                     
                     data = await response.json()
+                    print(f"API 응답: retcode={data.get('retcode')}, message={data.get('message', 'N/A')}")
+                    
+                    # retcode가 0이면 성공, -101은 인증키 만료, -111은 파라미터 오류
                     return data.get("retcode") == 0
                     
         except Exception as e:
@@ -804,7 +809,7 @@ class ModernGachaViewer:
         """비동기 모든 배너 조회 - 개선된 버전"""
         try:
             self.update_progress(0, "🔄 연결 준비 중...")
-            api_lang = "kr"
+            api_lang = "ko"  # kr에서 ko로 변경
             
             # 가챠 링크 검색
             gacha_link = await self._find_gacha_link()
