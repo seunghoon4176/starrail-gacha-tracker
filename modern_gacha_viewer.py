@@ -724,19 +724,25 @@ class ModernGachaViewer:
     
     async def _find_gacha_link(self) -> Optional[str]:
         """가챠 링크 검색"""
-        # 1. 레지스트리 검색
+        # 1. PowerShell 스크립트 검색 (우선순위 최고)
+        self.update_progress(0.03, "🔍 PowerShell 스크립트 검색 중...")
+        link = get_gacha_link_from_powershell_script()
+        if link:
+            return link
+        
+        # 2. 레지스트리 검색
         self.update_progress(0.05, "🔍 레지스트리 검색 중...")
         link = get_gacha_link_from_registry()
         if link:
             return link
         
-        # 2. 로그 파일 검색
+        # 3. 로그 파일 검색
         self.update_progress(0.07, "🔍 게임 로그 검색 중...")
         link = get_gacha_link_from_logs()
         if link:
             return link
         
-        # 3. 게임 캐시 검색
+        # 4. 게임 캐시 검색
         self.update_progress(0.08, "🔍 게임 캐시 검색 중...")
         link = get_gacha_link_from_game_cache()
         if link:
@@ -1127,7 +1133,6 @@ class ModernGachaViewer:
                     self.settings_window.focus()
                     return
             except:
-                # 창이 이미 파괴된 경우
                 self.settings_window = None
         
         self.settings_window = ctk.CTkToplevel(self.root)
@@ -1189,11 +1194,11 @@ class ModernGachaViewer:
         else:
             self.settings_theme_switch.deselect()
         
-        # 자동 획득 설정 (수동 입력 제거)
+        # 가챠 링크 획득 설정
         method_frame = ctk.CTkFrame(scrollable_frame)
         method_frame.pack(fill="x", padx=10, pady=10)
         
-        method_label = ctk.CTkLabel(method_frame, text="가챠 링크 획득:", font=ctk.CTkFont(size=16, weight="bold"))
+        method_label = ctk.CTkLabel(method_frame, text="가챠 링크 획득 방법:", font=ctk.CTkFont(size=16, weight="bold"))
         method_label.pack(anchor="w", padx=15, pady=(15, 5))
         
         method_info_frame = ctk.CTkFrame(method_frame)
@@ -1201,11 +1206,23 @@ class ModernGachaViewer:
         
         info_label = ctk.CTkLabel(
             method_info_frame,
-            text="✅ 자동 획득 모드가 활성화되어 있습니다.\n게임을 실행하고 워프 기록을 한 번 확인한 후 조회하세요.",
+            text="🔍 다음 순서로 자동 검색합니다:\n1. PowerShell 스크립트 (우선)\n2. Windows 레지스트리\n3. 게임 로그 파일\n4. 게임 웹 캐시",
             font=ctk.CTkFont(size=12),
             justify="left"
         )
         info_label.pack(anchor="w", padx=15, pady=10)
+        
+        # PowerShell 스크립트 테스트 버튼
+        test_ps_btn = ctk.CTkButton(
+            method_info_frame,
+            text="🔧 PowerShell 스크립트 테스트",
+            command=self.test_powershell_script,
+            width=200,
+            height=30,
+            fg_color="blue",
+            hover_color="darkblue"
+        )
+        test_ps_btn.pack(anchor="w", padx=15, pady=(5, 10))
         
         help_btn = ctk.CTkButton(
             method_info_frame,
@@ -1310,199 +1327,93 @@ class ModernGachaViewer:
         """링크 상태 업데이트"""
         # 조회 버튼은 항상 활성화 상태로 유지
         pass
+    
+    def test_powershell_script(self):
+        """PowerShell 스크립트 테스트"""
+        def run_test():
+            link = get_gacha_link_from_powershell_script()
+            if link:
+                messagebox.showinfo("테스트 성공", f"✅ PowerShell 스크립트로 가챠 링크를 찾았습니다!\n\n링크: {link[:150]}...")
+            else:
+                messagebox.showwarning("테스트 실패", "❌ PowerShell 스크립트로 가챠 링크를 찾을 수 없습니다.\n\n게임을 실행하고 가챠 기록을 확인한 후 다시 시도하세요.")
+        
+        # 별도 스레드에서 실행 (UI 블록킹 방지)
+        thread = threading.Thread(target=run_test, daemon=True)
+        thread.start()
 
-    
-    def open_settings(self):
-        """설정 창 열기"""
-        if self.settings_window is not None:
-            try:
-                if self.settings_window.winfo_exists():
-                    self.settings_window.focus()
-                    return
-            except:
-                # 창이 이미 파괴된 경우
-                self.settings_window = None
+def get_gacha_link_from_powershell_script() -> Optional[str]:
+    """PowerShell 스크립트를 사용하여 가챠 링크 추출"""
+    try:
+        print("🔄 PowerShell 스크립트로 가챠 링크 검색 중...")
         
-        self.settings_window = ctk.CTkToplevel(self.root)
-        self.settings_window.title("설정")
-        self.settings_window.geometry("600x500")
-        self.settings_window.transient(self.root)
+        # PowerShell 스크립트 명령어
+        ps_command = '''
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12;
+        Invoke-Expression (New-Object Net.WebClient).DownloadString("https://gist.githubusercontent.com/Star-Rail-Station/2512df54c4f35d399cc9abbde665e8f0/raw/get_warp_link_os.ps1?cachebust=srs")
+        '''
         
-        # 설정 창에도 아이콘 적용
-        try:
-            icon_paths = [
-                resource_path("images/anaxa.ico"),
-                resource_path("anaxa.ico"),
-                "images/anaxa.ico",
-                "anaxa.ico"
-            ]
+        # PowerShell 실행
+        result = subprocess.run([
+            'powershell', 
+            '-NoProfile', 
+            '-ExecutionPolicy', 'Bypass',
+            '-Command', ps_command
+        ], capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
+        
+        if result.returncode == 0 and result.stdout:
+            output = result.stdout.strip()
+            print(f"PowerShell 스크립트 출력: {output[:200]}...")
             
-            for icon_path in icon_paths:
-                if os.path.exists(icon_path):
-                    self.settings_window.iconbitmap(icon_path)
-                    break
-        except Exception as e:
-            print(f"설정 창 아이콘 로드 실패: {e}")
-        
-        # 설정 제목
-        settings_title = ctk.CTkLabel(
-            self.settings_window,
-            text="⚙️ 설정",
-            font=ctk.CTkFont(size=20, weight="bold")
-        )
-        settings_title.pack(pady=(20, 10))
-        
-        # 스크롤 가능한 프레임
-        scrollable_frame = ctk.CTkScrollableFrame(self.settings_window)
-        scrollable_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
-        
-        # 테마 설정
-        theme_frame = ctk.CTkFrame(scrollable_frame)
-        theme_frame.pack(fill="x", padx=10, pady=10)
-        
-        theme_label = ctk.CTkLabel(theme_frame, text="테마 설정:", font=ctk.CTkFont(size=16, weight="bold"))
-        theme_label.pack(anchor="w", padx=15, pady=(15, 5))
-        
-        theme_switch_frame = ctk.CTkFrame(theme_frame)
-        theme_switch_frame.pack(fill="x", padx=15, pady=(0, 15))
-        
-        self.settings_theme_switch = ctk.CTkSwitch(
-            theme_switch_frame,
-            text="다크 모드",
-            variable=self.theme_var,
-            onvalue="dark",
-            offvalue="light",
-            command=self.toggle_theme_in_settings
-        )
-        self.settings_theme_switch.pack(anchor="w", padx=15, pady=10)
-        
-        # 현재 테마에 맞게 스위치 상태 설정
-        if self.current_theme == "dark":
-            self.settings_theme_switch.select()
+            # 출력에서 가챠 링크 추출 - 개선된 방법
+            lines = output.split('\n')
+            for i, line in enumerate(lines):
+                line = line.strip()
+                
+                # "Warp History Url Found!" 다음 줄에서 링크 찾기
+                if "Warp History Url Found!" in line:
+                    # 다음 줄에서 링크 찾기
+                    if i + 1 < len(lines):
+                        next_line = lines[i + 1].strip()
+                        if next_line.startswith('https://') and 'getGachaLog' in next_line:
+                            print(f"✅ PowerShell 스크립트에서 링크 발견: {next_line[:100]}...")
+                            return next_line
+                
+                # 직접 https로 시작하는 getGachaLog 링크 찾기
+                if line.startswith('https://') and 'getGachaLog' in line:
+                    print(f"✅ PowerShell 스크립트에서 직접 링크 발견: {line[:100]}...")
+                    return line
+                
+                # 줄 내에서 https 링크 찾기
+                if 'https://' in line and 'getGachaLog' in line:
+                    # 정규식으로 URL 추출
+                    url_pattern = r'https://[^\s]*getGachaLog[^\s]*'
+                    url_match = re.search(url_pattern, line)
+                    if url_match:
+                        link = url_match.group(0)
+                        print(f"✅ PowerShell 스크립트에서 패턴 매칭으로 링크 발견: {link[:100]}...")
+                        return link
+            
+            # 전체 출력에서 URL 패턴 찾기 (마지막 시도)
+            url_pattern = r'https://public-operation-hkrpg[^\s]*getGachaLog[^\s]*'
+            url_matches = re.findall(url_pattern, output)
+            if url_matches:
+                link = url_matches[-1]  # 가장 마지막 링크 사용
+                print(f"✅ PowerShell 스크립트에서 전체 패턴 매칭으로 링크 발견: {link[:100]}...")
+                return link
+            
+            print("❌ PowerShell 스크립트 출력에서 가챠 링크를 찾을 수 없습니다")
+            print(f"전체 출력:\n{output}")
+            return None
         else:
-            self.settings_theme_switch.deselect()
-        
-        # 자동 획득 설정 (수동 입력 제거)
-        method_frame = ctk.CTkFrame(scrollable_frame)
-        method_frame.pack(fill="x", padx=10, pady=10)
-        
-        method_label = ctk.CTkLabel(method_frame, text="가챠 링크 획득:", font=ctk.CTkFont(size=16, weight="bold"))
-        method_label.pack(anchor="w", padx=15, pady=(15, 5))
-        
-        method_info_frame = ctk.CTkFrame(method_frame)
-        method_info_frame.pack(fill="x", padx=15, pady=(0, 15))
-        
-        info_label = ctk.CTkLabel(
-            method_info_frame,
-            text="✅ 자동 획득 모드가 활성화되어 있습니다.\n게임을 실행하고 워프 기록을 한 번 확인한 후 조회하세요.",
-            font=ctk.CTkFont(size=12),
-            justify="left"
-        )
-        info_label.pack(anchor="w", padx=15, pady=10)
-        
-        help_btn = ctk.CTkButton(
-            method_info_frame,
-            text="❓ 도움말",
-            command=self.show_help,
-            width=100,
-            height=35,
-            fg_color="gray50",
-            hover_color="gray40"
-        )
-        help_btn.pack(anchor="w", padx=15, pady=(0, 10))
-        
-        # 확인/취소 버튼
-        button_frame = ctk.CTkFrame(self.settings_window)
-        button_frame.pack(fill="x", padx=20, pady=(0, 20))
-        
-        cancel_btn = ctk.CTkButton(
-            button_frame,
-            text="취소",
-            command=self.close_settings,
-            width=100,
-            height=35,
-            fg_color="gray50",
-            hover_color="gray40"
-        )
-        cancel_btn.pack(side="right", padx=(10, 0), pady=10)
-        
-        apply_btn = ctk.CTkButton(
-            button_frame,
-            text="적용",
-            command=self.apply_settings,
-            width=100,
-            height=35
-        )
-        apply_btn.pack(side="right", padx=(10, 0), pady=10)
-        
-        # 창이 닫힐 때 변수 정리
-        self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings)
-    
-    def toggle_theme_in_settings(self):
-        """설정 창에서 테마 토글 (즉시 적용하지 않음)"""
-        # 테마 변수만 업데이트하고 실제 적용은 apply_settings에서 처리
-        pass
-    
-    def apply_settings(self):
-        """설정 적용"""
-        try:
-            # 테마 변경
-            new_theme = self.theme_var.get()
-            if new_theme != self.current_theme:
-                ctk.set_appearance_mode(new_theme)
-                self.current_theme = new_theme
-                self.save_settings()
+            print(f"❌ PowerShell 스크립트 실행 실패: {result.stderr}")
+            return None
             
-            self.close_settings()
-        except Exception as e:
-            print(f"설정 적용 중 오류: {e}")
-    
-    def save_settings(self):
-        """설정을 파일에 저장"""
-        try:
-            settings = {
-                "theme": self.current_theme
-            }
-            with open("settings.json", "w", encoding="utf-8") as f:
-                json.dump(settings, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"설정 저장 중 오류: {e}")
-    
-    def load_settings(self):
-        """설정을 파일에서 로드"""
-        try:
-            if os.path.exists("settings.json"):
-                with open("settings.json", "r", encoding="utf-8") as f:
-                    settings = json.load(f)
-                    saved_theme = settings.get("theme", "dark")
-                    self.current_theme = saved_theme
-                    self.theme_var.set(saved_theme)
-                    ctk.set_appearance_mode(saved_theme)
-            else:
-                # 기본 설정
-                self.current_theme = "dark"
-                self.theme_var.set("dark")
-                ctk.set_appearance_mode("dark")
-        except Exception as e:
-            print(f"설정 로드 중 오류: {e}")
-            self.current_theme = "dark"
-            self.theme_var.set("dark")
-            ctk.set_appearance_mode("dark")
-    
-    def close_settings(self):
-        """설정 창 닫기"""
-        try:
-            if hasattr(self, 'settings_window') and self.settings_window:
-                self.settings_window.destroy()
-        except Exception as e:
-            print(f"설정 창 닫기 중 오류: {e}")
-        finally:
-            self.settings_window = None
-    
-    def update_link_status(self):
-        """링크 상태 업데이트"""
-        # 조회 버튼은 항상 활성화 상태로 유지
-        pass
+    except subprocess.TimeoutExpired:
+        print("❌ PowerShell 스크립트 실행 시간 초과")
+        return None
+    except Exception as e:
+        print(f"❌ PowerShell 스크립트 실행 중 오류: {e}")
+        return None
 
 
 if __name__ == "__main__":
