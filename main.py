@@ -16,6 +16,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from urllib.parse import urlparse, parse_qs
 from collections import OrderedDict
 import time
+import requests  # 추가: 자동 업데이트 체크용
 
 #자체 모듈
 from GachaLinkFinder import GachaLinkFinder
@@ -23,6 +24,9 @@ from GachaAPI import GachaAPI
 from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_logs
 from ErrorHandler import ErrorHandler
 from CacheFileManager import get_gacha_link_from_game_cache
+
+CURRENT_VERSION = "1.0.0"  # 실제 배포시 버전 문자열로 관리
+GITHUB_API = "https://api.github.com/repos/seunghoon4176/starrail-gacha-tracker/releases/latest"
 
 # Pydantic V2 호환성 경고 숨기기
 warnings.filterwarnings("ignore", message="Valid config keys have changed in V2")
@@ -47,9 +51,8 @@ def resource_path(relative_path):
 class ModernGachaViewer:
     def __init__(self):
         self.root = ctk.CTk()
-        self.root.title("로컬 워프 트래커")
-        # 창 크기: 가로 720, 세로 1000으로 약간 더 키움 (잘림 방지)
-        self.root.geometry("720x950")
+        self.root.title("로컬 워프 트래커 V1.0.0")
+        self.root.geometry("700x950")  # ← 창 크기(고정)
         self.root.resizable(False, False)  # ← 리사이즈 가능 여부
         
         # 윈도우 아이콘 설정
@@ -102,6 +105,50 @@ class ModernGachaViewer:
         # 초기 링크 상태 확인
         self.update_link_status()
         
+        self.check_update_on_startup()  # 자동 업데이트 체크
+
+    def check_update_on_startup(self):
+        """GitHub 릴리즈에서 최신 버전 확인 및 자동 다운로드/실행 안내"""
+        try:
+            resp = requests.get(GITHUB_API, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                latest_ver = data.get("tag_name", "")
+                if latest_ver and latest_ver != CURRENT_VERSION:
+                    assets = data.get("assets", [])
+                    exe_asset = None
+                    for asset in assets:
+                        # 윈도우용 실행파일만 찾음 (예: .exe)
+                        if asset["name"].endswith(".exe"):
+                            exe_asset = asset
+                            break
+                    if exe_asset:
+                        url = exe_asset["browser_download_url"]
+                        msg = f"새 버전이 있습니다: {latest_ver}\n지금 자동으로 다운로드할까요?"
+                        if messagebox.askyesno("업데이트 알림", msg):
+                            import tempfile, os, subprocess
+                            local_path = os.path.join(tempfile.gettempdir(), exe_asset["name"])
+                            try:
+                                with requests.get(url, stream=True, timeout=30) as r:
+                                    r.raise_for_status()
+                                    with open(local_path, "wb") as f:
+                                        for chunk in r.iter_content(chunk_size=8192):
+                                            f.write(chunk)
+                                messagebox.showinfo("다운로드 완료", f"새 버전이 다운로드되었습니다.\n프로그램을 종료하고 새 버전을 실행합니다.")
+                                subprocess.Popen([local_path])
+                                self.root.destroy()
+                            except Exception as e:
+                                messagebox.showerror("업데이트 실패", f"다운로드 또는 실행 중 오류 발생:\n{e}")
+                    else:
+                        # 실행파일이 없으면 릴리즈 페이지로 안내
+                        url = data.get("html_url", "https://github.com/seunghoon4176/starrail-gacha-tracker/releases")
+                        msg = f"새 버전이 있습니다: {latest_ver}\n업데이트 페이지로 이동할까요?"
+                        if messagebox.askyesno("업데이트 알림", msg):
+                            import webbrowser
+                            webbrowser.open(url)
+        except Exception as e:
+            print(f"업데이트 확인 실패: {e}")
+
     def setup_ui(self):
         # 메인 컨테이너 (여백 조정)
         self.main_container = ctk.CTkFrame(self.root)
