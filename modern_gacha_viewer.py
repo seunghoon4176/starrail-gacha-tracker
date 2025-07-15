@@ -1756,4 +1756,3 @@ def get_gacha_link_from_powershell_script() -> Optional[str]:
 if __name__ == "__main__":
     app = ModernGachaViewer()
     app.run()
-    app.run()
