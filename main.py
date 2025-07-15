@@ -20,7 +20,7 @@ import time
 #자체 모듈
 from GachaLinkFinder import GachaLinkFinder
 from GachaAPI import GachaAPI
-from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_logs
+from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_logs, get_gacha_link_from_powershell_script
 from ErrorHandler import ErrorHandler
 from CacheFileManager import get_gacha_link_from_game_cache
 
@@ -80,7 +80,26 @@ class ModernGachaViewer:
         # 에러 핸들러 추가
         self.error_handler = ErrorHandler()
 
+        # 배너 페이지네이션 정보 초기화 (setup_ui보다 먼저!)
+        self.banner_pagination = {}  # {banner_id: {"page": int, "total_pages": int}}
         self.setup_ui()
+        
+        # 기본 설정 변수들 (구문 오류 수정)
+        self.link_method = ctk.StringVar(value="auto")  # 자동으로 기본 설정
+        self.theme_var = ctk.StringVar(value="dark")  # 테마 변수 추가
+        self.current_theme = "dark"  # 현재 테마 추적
+        
+        # 데이터 파일 초기화
+        self.data_file = "gacha_records.json"
+        
+        # 설정 로드
+        self.load_settings()
+        
+        # 아래 함수가 없으면 임시로 주석 처리하거나, 아래와 같이 간단히 추가하세요.
+        self.load_existing_data()
+        
+        # 초기 링크 상태 확인
+        self.update_link_status()
         
     def setup_ui(self):
         # 메인 컨테이너
@@ -98,22 +117,6 @@ class ModernGachaViewer:
         
         # 설정 창 초기화
         self.settings_window = None
-        
-        # 기본 설정 변수들 (구문 오류 수정)
-        self.link_method = ctk.StringVar(value="auto")  # 자동으로 기본 설정
-        self.theme_var = ctk.StringVar(value="dark")  # 테마 변수 추가
-        self.current_theme = "dark"  # 현재 테마 추적
-        
-        # 데이터 파일 초기화
-        self.data_file = "gacha_records.json"
-        
-        # 설정 로드
-        self.load_settings()
-        
-        self.load_existing_data()
-        
-        # 초기 링크 상태 확인
-        self.update_link_status()
         
     def create_simple_control_panel(self):
         """간단한 컨트롤 패널 생성"""
@@ -214,7 +217,33 @@ class ModernGachaViewer:
         )
         records_label.pack(anchor="w", padx=15, pady=(15, 5))
         
-        # 기록 텍스트박스를 훨씬 더 크게
+        # 페이지네이션 컨트롤 프레임 추가
+        pagination_frame = ctk.CTkFrame(records_frame)
+        pagination_frame.pack(fill="x", padx=15, pady=(0, 5))
+
+        prev_btn = ctk.CTkButton(
+            pagination_frame,
+            text="⬅ 이전",
+            width=80,
+            command=lambda bid=banner_id: self.change_page(bid, -1)
+        )
+        prev_btn.pack(side="left", padx=(0, 10))
+
+        page_label = ctk.CTkLabel(
+            pagination_frame,
+            text="1 / 1",
+            width=80
+        )
+        page_label.pack(side="left", padx=(0, 10))
+
+        next_btn = ctk.CTkButton(
+            pagination_frame,
+            text="다음 ➡",
+            width=80,
+            command=lambda bid=banner_id: self.change_page(bid, 1)
+        )
+        next_btn.pack(side="left")
+
         records_text = ctk.CTkTextbox(
             records_frame, 
             height=450,
@@ -227,9 +256,20 @@ class ModernGachaViewer:
         self.banner_tabs[banner_id] = {
             "tab": tab,
             "stats_text": stats_text,
-            "records_text": records_text
+            "records_text": records_text,
+            "prev_btn": prev_btn,
+            "next_btn": next_btn,
+            "page_label": page_label
         }
-        
+        self.banner_pagination[banner_id] = {"page": 1, "total_pages": 1}
+
+    def change_page(self, banner_id, delta):
+        pag = self.banner_pagination[banner_id]
+        new_page = pag["page"] + delta
+        if 1 <= new_page <= pag["total_pages"]:
+            pag["page"] = new_page
+            self._update_banner_display(banner_id)
+
     def create_summary_tab(self):
         """통합 통계 탭 생성"""
         summary_tab = self.tabview.add("📈 통합 통계")
@@ -378,7 +418,6 @@ class ModernGachaViewer:
         
         # 3. 로그 파일 검색
         self.update_progress(0.07, "🔍 게임 로그 검색 중...")
-        link = get_gacha_link_from_logs()
         if link:
             return link
         
@@ -619,10 +658,19 @@ class ModernGachaViewer:
         tab_info["stats_text"].insert("0.0", stats_text)
         tab_info["stats_text"].configure(state="disabled")
         
-        # 기록 업데이트 - 더 시각적으로
+        # 페이지네이션 계산
+        items_per_page = 15
+        total_items = len(data)
+        total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
+        pag = self.banner_pagination[banner_id]
+        if pag["page"] > total_pages:
+            pag["page"] = 1
+        pag["total_pages"] = total_pages
+        current_page = pag["page"]
+
+        # 기록 업데이트 - 페이지네이션 적용
         if data:
-            records_text = "🎊 가챠 기록 (최신순)\n" + "="*50 + "\n\n"
-            
+            records_text = f"🎊 가챠 기록 (최신순, {current_page}/{total_pages}페이지)\n" + "="*50 + "\n\n"
             five_star_positions = []
             for i, item in enumerate(data):
                 if item:
@@ -632,9 +680,10 @@ class ModernGachaViewer:
                             five_star_positions.append(i)
                     except:
                         continue
-            
-            display_count = min(len(data), 15)  # 15개로 제한
-            for i in range(display_count):
+
+            start_idx = (current_page - 1) * items_per_page
+            end_idx = min(start_idx + items_per_page, total_items)
+            for i in range(start_idx, end_idx):
                 item = data[i]
                 if not item:
                     continue
@@ -643,8 +692,7 @@ class ModernGachaViewer:
                     item_rank = getattr(item, 'rank', 3)
                     item_name = getattr(item, 'name', 'Unknown')
                     item_time = getattr(item, 'time', '')
-                    
-                    # 등급별 시각적 표현
+
                     if str(item_rank) == "5":
                         rank_display = "⭐⭐⭐⭐⭐"
                         prefix = "🌟"
@@ -659,8 +707,8 @@ class ModernGachaViewer:
                         rank_display = "⭐⭐⭐"
                         prefix = "🔹"
                         name_style = item_name
-                    
-                    # 천장 정보 (안전한 계산)
+
+                    # interval_info 계산
                     interval_info = ""
                     if str(item_rank) == "5" and i in five_star_positions:
                         try:
@@ -678,29 +726,26 @@ class ModernGachaViewer:
                                     interval_info = f" 😭 {interval}뽑..."
                         except (ValueError, IndexError):
                             interval_info = ""
-                    
-                    # 시간 포맷팅 (안전한 처리)
+
+                    # 시간 포맷팅
                     try:
                         from datetime import datetime
                         time_obj = datetime.strptime(item_time, "%Y-%m-%d %H:%M:%S")
                         time_display = time_obj.strftime("%m/%d %H:%M")
                     except:
                         time_display = str(item_time)[:16] if item_time else "알 수 없음"
-                    
+
                     records_text += f"{i+1:2d}. {prefix} {rank_display} {name_style}{interval_info}\n"
                     records_text += f"     📅 {time_display}\n"
-                    
+
                     if str(item_rank) == "5":
                         records_text += "╚" + "═" * 30 + "╝\n"
-                    
+
                     records_text += "\n"
-                    
                 except Exception as e:
                     print(f"기록 표시 중 오류 (항목 {i}): {e}")
                     continue
-            
-            if len(data) > 15:
-                records_text += f"📦 ... 및 {len(data)-15}개 기록 더 있습니다"
+
         else:
             records_text = """🎯 아직 가챠 기록이 없습니다!
 
@@ -711,251 +756,17 @@ class ModernGachaViewer:
    4. 다시 조회하기
 
 🍀 행운을 빕니다! 🍀"""
-        
+
         tab_info["records_text"].configure(state="normal")
         tab_info["records_text"].delete("0.0", "end")
         tab_info["records_text"].insert("0.0", records_text)
         tab_info["records_text"].configure(state="disabled")
 
-    def _update_summary_display(self):
-        """통합 통계 업데이트 - 시각적으로 개선된 버전 (타입 안전성 강화)"""
-        summary_text = "🎊 전체 가챠 통계 대시보드 🎊\n" + "="*60 + "\n\n"
-        
-        total_all = 0
-        total_5star = 0
-        total_4star = 0
-        total_3star = 0
-        
-        # 배너별 상세 통계 (안전한 계산)
-        for banner_id, banner_info in self.banner_data.items():
-            stats = banner_info.get("stats", {})
-            if stats and stats.get('total', 0) > 0:
-                banner_name = banner_info["name"]
-                
-                try:
-                    total = int(stats.get('total', 0))
-                    five_star = int(stats.get('5star', 0))
-                    four_star = int(stats.get('4star', 0))
-                    three_star = int(stats.get('3star', 0))
-                    
-                    # 5성 확률 계산 (안전한 나눗셈)
-                    five_star_rate = (five_star / max(total, 1)) * 100
-                    
-                    # 운빨 평가
-                    if five_star_rate >= 2.0:
-                        luck_icon = "🍀🎉"
-                    elif five_star_rate >= 1.6:
-                        luck_icon = "🎉"
-                    elif five_star_rate >= 1.0:
-                        luck_icon = "😊"
-                    else:
-                        luck_icon = "😔"
-                    
-                    summary_text += f"🎯 {banner_name} {luck_icon}\n"
-                    summary_text += f"   총 {total:,}회 | 5성 {five_star}개 ({five_star_rate:.1f}%) | 4성 {four_star}개 | 3성 {three_star}개\n"
-                    
-                    # 현재 천장 상태 (안전한 처리)
-                    pity = int(stats.get('pity_count', 0))
-                    if pity >= 80:
-                        pity_status = f"🔥 천장 임박! ({pity}/90)"
-                    elif pity >= 60:
-                        pity_status = f"🟨 천장 접근 ({pity}/90)"
-                    elif pity >= 30:
-                        pity_status = f"🟩 안전구간 ({pity}/90)"
-                    else:
-                        pity_status = f"✅ 초기구간 ({pity}/90)"
-                    
-                    summary_text += f"   천장: {pity_status}\n\n"
-                    
-                    total_all += total
-                    total_5star += five_star
-                    total_4star += four_star
-                    total_3star += three_star
-                    
-                except (TypeError, ValueError, ZeroDivisionError) as e:
-                    print(f"통계 계산 오류 ({banner_name}): {e}")
-                    summary_text += f"🎯 {banner_name}: 데이터 처리 중...\n\n"
-                    continue
-        
-        if total_all > 0:
-            try:
-                overall_rate = (total_5star / total_all) * 100
-                
-                summary_text += "🌟" + "="*50 + "🌟\n"
-                summary_text += f"🎊 전체 종합 통계\n\n"
-                summary_text += f"💎 총 가챠 횟수: {total_all:,}회\n"
-                summary_text += f"⭐ 5성 비율: {overall_rate:.2f}% ({total_5star}개) {'🔥' * min(total_5star, 10)}\n"
-                summary_text += f"🌟 4성 비율: {(total_4star/total_all)*100:.2f}% ({total_4star}개)\n"
-                summary_text += f"✨ 3성 비율: {(total_3star/total_all)*100:.2f}% ({total_3star}개)\n\n"
-                
-                # 전체 평가
-                if overall_rate >= 2.0:
-                    overall_assessment = "🍀✨ 전설적인 운빨!"
-                elif overall_rate >= 1.8:
-                    overall_assessment = "🎉🔥 엄청난 운빨!"
-                elif overall_rate >= 1.6:
-                    overall_assessment = "🎊 좋은 운빨!"
-                elif overall_rate >= 1.2:
-                    overall_assessment = "😊 괜찮은 운빨"
-                elif overall_rate >= 0.8:
-                    overall_assessment = "😐 평범한 운빨"
-                else:
-                    overall_assessment = "😭 아쉬운 운빨..."
-                
-                summary_text += f"🎰 종합 운빨 평가: {overall_assessment}\n"
-                summary_text += f"📊 평균 5성까지: {total_all/max(total_5star,1):.1f}회\n"
-                summary_text += f"💫 평균 4성까지: {total_all/max(total_4star,1):.1f}회"
-                
-                # 목표 달성도
-                if total_5star >= 50:
-                    achievement = "🏆 5성 컬렉터 마스터!"
-                elif total_5star >= 20:
-                    achievement = "🥇 5성 컬렉터!"
-                elif total_5star >= 10:
-                    achievement = "🥈 5성 애호가!"
-                elif total_5star >= 5:
-                    achievement = "🥉 5성 초보자!"
-                else:
-                    achievement = "🌱 이제 시작이야!"
-                
-                summary_text += f"\n\n🏅 달성도: {achievement}"
-                
-            except (TypeError, ValueError, ZeroDivisionError) as e:
-                print(f"전체 통계 계산 오류: {e}")
-                summary_text += "📊 통계 계산 중..."
-        else:
-            summary_text += """🎯 아직 가챠 데이터가 없습니다!
+        # 페이지네이션 컨트롤 업데이트
+        tab_info["page_label"].configure(text=f"{current_page} / {total_pages}")
+        tab_info["prev_btn"].configure(state="normal" if current_page > 1 else "disabled")
+        tab_info["next_btn"].configure(state="normal" if current_page < total_pages else "disabled")
 
-🎮 가챠를 뽑고 통계를 확인해보세요:
-   1. 게임에서 워프 진행
-   2. '모든 배너 조회' 클릭
-   3. 멋진 통계 확인!
-
-🍀 좋은 결과 있기를! 🍀"""
-        
-        self.summary_text.configure(state="normal")
-        self.summary_text.delete("0.0", "end")
-        self.summary_text.insert("0.0", summary_text)
-        self.summary_text.configure(state="disabled")
-        
-    def run(self):
-        """애플리케이션 실행"""
-        self.root.mainloop()
-    
-    def load_existing_data(self):
-        """기존 데이터 파일 로드"""
-        try:
-            if os.path.exists(self.data_file):
-                with open(self.data_file, "r", encoding="utf-8") as f:
-                    saved_data = json.load(f)
-                    
-                # 저장된 데이터를 배너별로 복원
-                for banner_id in self.banner_data.keys():
-                    if banner_id in saved_data:
-                        # 데이터 형태 변환 (JSON에서 객체로)
-                        raw_data = saved_data[banner_id]["data"]
-                        converted_data = []
-                        
-                        for item_dict in raw_data:
-                            # 간단한 객체 생성 (honkaistarrail 객체와 유사하게)
-                            item_obj = type('GachaItem', (), {})()
-                            item_obj.name = item_dict.get("name", "")
-                            item_obj.rank = item_dict.get("rank", 3)
-                            item_obj.time = item_dict.get("time", "")
-                            item_obj.type = item_dict.get("type", "")
-                            converted_data.append(item_obj)
-                        
-                        self.banner_data[banner_id]["data"] = converted_data
-                        
-                        # 통계 재계산
-                        self._calculate_banner_stats(banner_id)
-                        
-                print(f"✅ 기존 데이터 로드 완료: {self.data_file}")
-                
-                # UI 업데이트
-                for banner_id in self.banner_data.keys():
-                    if self.banner_data[banner_id]["data"]:
-                        self._update_banner_display(banner_id)
-                self._update_summary_display()
-                        
-            else:
-                print(f"📝 새 데이터 파일 생성: {self.data_file}")
-                self.save_data_to_file()
-                
-        except Exception as e:
-            print(f"❌ 데이터 로드 실패: {str(e)}")
-            # 데이터 로드 실패 시 빈 파일 생성
-            self.save_data_to_file()
-    
-    def save_data_to_file(self):
-        """현재 데이터를 파일에 저장"""
-        try:
-            save_data = {}
-            
-            for banner_id, banner_info in self.banner_data.items():
-                # 데이터를 JSON 직렬화 가능한 형태로 변환
-                serializable_data = []
-                for item in banner_info["data"]:
-                    item_dict = {
-                        "name": getattr(item, 'name', ''),
-                        "rank": getattr(item, 'rank', 3),
-                        "time": str(getattr(item, 'time', '')),
-                        "type": getattr(item, 'type', '')
-                    }
-                    serializable_data.append(item_dict)
-                
-                save_data[banner_id] = {
-                    "name": banner_info["name"],
-                    "data": serializable_data,
-                    "stats": banner_info.get("stats", {})
-                }
-            
-            with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump(save_data, f, ensure_ascii=False, indent=2)
-                
-            print(f"💾 데이터 저장 완료: {self.data_file}")
-            
-        except Exception as e:
-            print(f"❌ 데이터 저장 실패: {str(e)}")
-    
-    def merge_new_data(self, banner_id, new_data):
-        """새 데이터를 기존 데이터와 중복 없이 병합"""
-        if not new_data:  # 새 데이터가 없으면 바로 반환
-            return 0
-            
-        existing_data = self.banner_data[banner_id]["data"]
-        
-        # 기존 데이터의 ID 집합 생성 (중복 체크용)
-        existing_ids = set()
-        for item in existing_data:
-            if item:  # 아이템이 None이 아닌지 확인
-                # name+time 조합으로 식별
-                item_name = getattr(item, 'name', '')
-                item_time = getattr(item, 'time', '')
-                composite_id = f"{item_name}_{item_time}"
-                existing_ids.add(composite_id)
-        
-        # 새 데이터에서 중복되지 않은 항목만 추가
-        new_items_added = 0
-        for item in new_data:
-            if item and hasattr(item, 'name'):  # 아이템이 유효한지 확인
-                item_name = getattr(item, 'name', '')
-                item_time = getattr(item, 'time', '')
-                check_id = f"{item_name}_{item_time}"
-                
-                if check_id not in existing_ids and check_id != "_":  # 빈 ID도 제외
-                    existing_data.append(item)
-                    existing_ids.add(check_id)
-                    new_items_added += 1
-        
-        # 시간순 정렬 (최신순) - 안전한 정렬
-        try:
-            existing_data.sort(key=lambda x: str(getattr(x, 'time', '')) if x else '', reverse=True)
-        except Exception as sort_error:
-            print(f"정렬 중 오류: {sort_error}")
-        
-        return new_items_added
-    
     def open_settings(self):
         """설정 창 열기"""
         if self.settings_window is not None:
@@ -965,12 +776,12 @@ class ModernGachaViewer:
                     return
             except:
                 self.settings_window = None
-        
+
         self.settings_window = ctk.CTkToplevel(self.root)
         self.settings_window.title("설정")
         self.settings_window.geometry("600x500")
         self.settings_window.transient(self.root)
-        
+
         # 설정 창에도 아이콘 적용
         try:
             icon_paths = [
@@ -979,14 +790,13 @@ class ModernGachaViewer:
                 "images/anaxa.ico",
                 "anaxa.ico"
             ]
-            
             for icon_path in icon_paths:
                 if os.path.exists(icon_path):
                     self.settings_window.iconbitmap(icon_path)
                     break
         except Exception as e:
             print(f"설정 창 아이콘 로드 실패: {e}")
-        
+
         # 설정 제목
         settings_title = ctk.CTkLabel(
             self.settings_window,
@@ -994,21 +804,21 @@ class ModernGachaViewer:
             font=ctk.CTkFont(size=20, weight="bold")
         )
         settings_title.pack(pady=(20, 10))
-        
+
         # 스크롤 가능한 프레임
         scrollable_frame = ctk.CTkScrollableFrame(self.settings_window)
         scrollable_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
-        
+
         # 테마 설정
         theme_frame = ctk.CTkFrame(scrollable_frame)
         theme_frame.pack(fill="x", padx=10, pady=10)
-        
+
         theme_label = ctk.CTkLabel(theme_frame, text="테마 설정:", font=ctk.CTkFont(size=16, weight="bold"))
         theme_label.pack(anchor="w", padx=15, pady=(15, 5))
-        
+
         theme_switch_frame = ctk.CTkFrame(theme_frame)
         theme_switch_frame.pack(fill="x", padx=15, pady=(0, 15))
-        
+
         self.settings_theme_switch = ctk.CTkSwitch(
             theme_switch_frame,
             text="다크 모드",
@@ -1018,23 +828,23 @@ class ModernGachaViewer:
             command=self.toggle_theme_in_settings
         )
         self.settings_theme_switch.pack(anchor="w", padx=15, pady=10)
-        
+
         # 현재 테마에 맞게 스위치 상태 설정
         if self.current_theme == "dark":
             self.settings_theme_switch.select()
         else:
             self.settings_theme_switch.deselect()
-        
+
         # 가챠 링크 획득 설정
         method_frame = ctk.CTkFrame(scrollable_frame)
         method_frame.pack(fill="x", padx=10, pady=10)
-        
+
         method_label = ctk.CTkLabel(method_frame, text="가챠 링크 획득 방법:", font=ctk.CTkFont(size=16, weight="bold"))
         method_label.pack(anchor="w", padx=15, pady=(15, 5))
-        
+
         method_info_frame = ctk.CTkFrame(method_frame)
         method_info_frame.pack(fill="x", padx=15, pady=(0, 15))
-        
+
         info_label = ctk.CTkLabel(
             method_info_frame,
             text="🔍 다음 순서로 자동 검색합니다:\n1. PowerShell 스크립트 (우선)\n2. Windows 레지스트리\n3. 게임 로그 파일\n4. 게임 웹 캐시",
@@ -1042,7 +852,7 @@ class ModernGachaViewer:
             justify="left"
         )
         info_label.pack(anchor="w", padx=15, pady=10)
-        
+
         # PowerShell 스크립트 테스트 버튼
         test_ps_btn = ctk.CTkButton(
             method_info_frame,
@@ -1054,7 +864,7 @@ class ModernGachaViewer:
             hover_color="darkblue"
         )
         test_ps_btn.pack(anchor="w", padx=15, pady=(5, 10))
-        
+
         help_btn = ctk.CTkButton(
             method_info_frame,
             text="❓ 도움말",
@@ -1065,11 +875,11 @@ class ModernGachaViewer:
             hover_color="gray40"
         )
         help_btn.pack(anchor="w", padx=15, pady=(0, 10))
-        
+
         # 확인/취소 버튼
         button_frame = ctk.CTkFrame(self.settings_window)
         button_frame.pack(fill="x", padx=20, pady=(0, 20))
-        
+
         cancel_btn = ctk.CTkButton(
             button_frame,
             text="취소",
@@ -1080,7 +890,7 @@ class ModernGachaViewer:
             hover_color="gray40"
         )
         cancel_btn.pack(side="right", padx=(10, 0), pady=10)
-        
+
         apply_btn = ctk.CTkButton(
             button_frame,
             text="적용",
@@ -1089,15 +899,15 @@ class ModernGachaViewer:
             height=35
         )
         apply_btn.pack(side="right", padx=(10, 0), pady=10)
-        
+
         # 창이 닫힐 때 변수 정리
         self.settings_window.protocol("WM_DELETE_WINDOW", self.close_settings)
-    
+
     def toggle_theme_in_settings(self):
         """설정 창에서 테마 토글 (즉시 적용하지 않음)"""
         # 테마 변수만 업데이트하고 실제 적용은 apply_settings에서 처리
         pass
-    
+
     def apply_settings(self):
         """설정 적용"""
         try:
@@ -1107,11 +917,10 @@ class ModernGachaViewer:
                 ctk.set_appearance_mode(new_theme)
                 self.current_theme = new_theme
                 self.save_settings()
-            
             self.close_settings()
         except Exception as e:
             print(f"설정 적용 중 오류: {e}")
-    
+
     def save_settings(self):
         """설정을 파일에 저장"""
         try:
@@ -1122,7 +931,7 @@ class ModernGachaViewer:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"설정 저장 중 오류: {e}")
-    
+
     def load_settings(self):
         """설정을 파일에서 로드"""
         try:
@@ -1143,7 +952,62 @@ class ModernGachaViewer:
             self.current_theme = "dark"
             self.theme_var.set("dark")
             ctk.set_appearance_mode("dark")
-    
+
+    def load_existing_data(self):
+        """기존 데이터 파일 로드"""
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, "r", encoding="utf-8") as f:
+                    saved_data = json.load(f)
+                # 저장된 데이터를 배너별로 복원
+                for banner_id in self.banner_data.keys():
+                    if banner_id in saved_data:
+                        raw_data = saved_data[banner_id]["data"]
+                        converted_data = []
+                        for item_dict in raw_data:
+                            item_obj = type('GachaItem', (), {})()
+                            item_obj.name = item_dict.get("name", "")
+                            item_obj.rank = item_dict.get("rank", 3)
+                            item_obj.time = item_dict.get("time", "")
+                            item_obj.type = item_dict.get("type", "")
+                            converted_data.append(item_obj)
+                        self.banner_data[banner_id]["data"] = converted_data
+                        self._calculate_banner_stats(banner_id)
+                # UI 업데이트
+                for banner_id in self.banner_data.keys():
+                    if self.banner_data[banner_id]["data"]:
+                        self._update_banner_display(banner_id)
+                self._update_summary_display()
+            else:
+                self.save_data_to_file()
+        except Exception as e:
+            print(f"❌ 데이터 로드 실패: {str(e)}")
+            self.save_data_to_file()
+
+    def save_data_to_file(self):
+        """현재 데이터를 파일에 저장"""
+        try:
+            save_data = {}
+            for banner_id, banner_info in self.banner_data.items():
+                serializable_data = []
+                for item in banner_info["data"]:
+                    item_dict = {
+                        "name": getattr(item, 'name', ''),
+                        "rank": getattr(item, 'rank', 3),
+                        "time": str(getattr(item, 'time', '')),
+                        "type": getattr(item, 'type', '')
+                    }
+                    serializable_data.append(item_dict)
+                save_data[banner_id] = {
+                    "name": banner_info["name"],
+                    "data": serializable_data,
+                    "stats": banner_info.get("stats", {})
+                }
+            with open(self.data_file, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"❌ 데이터 저장 실패: {str(e)}")
+
     def close_settings(self):
         """설정 창 닫기"""
         try:
@@ -1153,12 +1017,7 @@ class ModernGachaViewer:
             print(f"설정 창 닫기 중 오류: {e}")
         finally:
             self.settings_window = None
-    
-    def update_link_status(self):
-        """링크 상태 업데이트"""
-        # 조회 버튼은 항상 활성화 상태로 유지
-        pass
-    
+
     def test_powershell_script(self):
         """PowerShell 스크립트 테스트"""
         def run_test():
@@ -1167,85 +1026,60 @@ class ModernGachaViewer:
                 messagebox.showinfo("테스트 성공", f"✅ PowerShell 스크립트로 가챠 링크를 찾았습니다!\n\n링크: {link[:150]}...")
             else:
                 messagebox.showwarning("테스트 실패", "❌ PowerShell 스크립트로 가챠 링크를 찾을 수 없습니다.\n\n게임을 실행하고 가챠 기록을 확인한 후 다시 시도하세요.")
-        
+
         # 별도 스레드에서 실행 (UI 블록킹 방지)
         thread = threading.Thread(target=run_test, daemon=True)
         thread.start()
 
-def get_gacha_link_from_powershell_script() -> Optional[str]:
-    """PowerShell 스크립트를 사용하여 가챠 링크 추출"""
-    try:
-        print("🔄 PowerShell 스크립트로 가챠 링크 검색 중...")
-        
-        # PowerShell 스크립트 명령어
-        ps_command = '''
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12;
-        Invoke-Expression (New-Object Net.WebClient).DownloadString("https://gist.githubusercontent.com/Star-Rail-Station/2512df54c4f35d399cc9abbde665e8f0/raw/get_warp_link_os.ps1?cachebust=srs")
-        '''
-        
-        # PowerShell 실행
-        result = subprocess.run([
-            'powershell', 
-            '-NoProfile', 
-            '-ExecutionPolicy', 'Bypass',
-            '-Command', ps_command
-        ], capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
-        
-        if result.returncode == 0 and result.stdout:
-            output = result.stdout.strip()
-            print(f"PowerShell 스크립트 출력: {output[:200]}...")
-            
-            # 출력에서 가챠 링크 추출 - 개선된 방법
-            lines = output.split('\n')
-            for i, line in enumerate(lines):
-                line = line.strip()
-                
-                # "Warp History Url Found!" 다음 줄에서 링크 찾기
-                if "Warp History Url Found!" in line:
-                    # 다음 줄에서 링크 찾기
-                    if i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        if next_line.startswith('https://') and 'getGachaLog' in next_line:
-                            print(f"✅ PowerShell 스크립트에서 링크 발견: {next_line[:100]}...")
-                            return next_line
-                
-                # 직접 https로 시작하는 getGachaLog 링크 찾기
-                if line.startswith('https://') and 'getGachaLog' in line:
-                    print(f"✅ PowerShell 스크립트에서 직접 링크 발견: {line[:100]}...")
-                    return line
-                
-                # 줄 내에서 https 링크 찾기
-                if 'https://' in line and 'getGachaLog' in line:
-                    # 정규식으로 URL 추출
-                    url_pattern = r'https://[^\s]*getGachaLog[^\s]*'
-                    url_match = re.search(url_pattern, line)
-                    if url_match:
-                        link = url_match.group(0)
-                        print(f"✅ PowerShell 스크립트에서 패턴 매칭으로 링크 발견: {link[:100]}...")
-                        return link
-            
-            # 전체 출력에서 URL 패턴 찾기 (마지막 시도)
-            url_pattern = r'https://public-operation-hkrpg[^\s]*getGachaLog[^\s]*'
-            url_matches = re.findall(url_pattern, output)
-            if url_matches:
-                link = url_matches[-1]  # 가장 마지막 링크 사용
-                print(f"✅ PowerShell 스크립트에서 전체 패턴 매칭으로 링크 발견: {link[:100]}...")
-                return link
-            
-            print("❌ PowerShell 스크립트 출력에서 가챠 링크를 찾을 수 없습니다")
-            print(f"전체 출력:\n{output}")
-            return None
-        else:
-            print(f"❌ PowerShell 스크립트 실행 실패: {result.stderr}")
-            return None
-            
-    except subprocess.TimeoutExpired:
-        print("❌ PowerShell 스크립트 실행 시간 초과")
-        return None
-    except Exception as e:
-        print(f"❌ PowerShell 스크립트 실행 중 오류: {e}")
-        return None
+    def update_link_status(self):
+        """링크 상태를 UI에 표시 (조회 버튼 활성/비활성 등)"""
+        # 예시: 링크가 있으면 버튼 활성화, 없으면 비활성화 등
+        # 실제 구현에서는 self.fetch_all_btn.configure(state="normal"/"disabled") 등으로 제어
+        self.fetch_all_btn.configure(state="normal")
+        # 필요하다면 상태 라벨 등도 업데이트
 
+    def _update_summary_display(self):
+        """통합 통계 탭에 전체 요약 통계 표시"""
+        total_count = 0
+        total_5star = 0
+        total_4star = 0
+        total_3star = 0
+        summary_lines = []
+        for banner_id, banner in self.banner_data.items():
+            stats = banner.get("stats", {})
+            if not stats or not stats.get("total"):
+                continue
+            total = stats.get("total", 0)
+            five = stats.get("5star", 0)
+            four = stats.get("4star", 0)
+            three = stats.get("3star", 0)
+            total_count += total
+            total_5star += five
+            total_4star += four
+            total_3star += three
+            summary_lines.append(
+                f"【{banner['name']}】\n"
+                f"  총 {total:,}회 | 5성 {five}개 | 4성 {four}개 | 3성 {three}개\n"
+            )
+        if total_count > 0:
+            rate_5 = (total_5star / total_count) * 100
+            rate_4 = (total_4star / total_count) * 100
+            rate_3 = (total_3star / total_count) * 100
+            summary = (
+                f"📈 전체 가챠 통계\n"
+                f"총 {total_count:,}회\n"
+                f"⭐ 5성: {total_5star}개 ({rate_5:.2f}%)\n"
+                f"💜 4성: {total_4star}개 ({rate_4:.2f}%)\n"
+                f"✨ 3성: {total_3star}개 ({rate_3:.2f}%)\n\n"
+                + "\n".join(summary_lines)
+            )
+        else:
+            summary = "아직 데이터가 없습니다.\n가챠를 조회해 주세요."
+        self.summary_text.configure(state="normal")
+        self.summary_text.delete("0.0", "end")
+        self.summary_text.insert("0.0", summary)
+        self.summary_text.configure(state="disabled")
+        
 if __name__ == "__main__":
     app = ModernGachaViewer()
-    app.run()
+    app.root.mainloop()
