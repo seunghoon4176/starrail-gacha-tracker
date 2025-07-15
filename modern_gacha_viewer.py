@@ -14,6 +14,7 @@ import tempfile
 import shutil
 from typing import Optional, List, Dict, Any, Tuple
 from urllib.parse import urlparse, parse_qs
+from collections import OrderedDict
 import time
 
 # Pydantic V2 호환성 경고 숨기기
@@ -573,17 +574,15 @@ class ModernGachaViewer:
         except Exception as e:
             print(f"아이콘 로드 실패: {e}")
         
-        # 데이터 저장용 - 콜라보 워프 광추 배너 추가
-        # 실제 스타레일 API 배너 타입에 맞게 수정 - 전체 배너 포함
-        # 실제 API 응답 패턴에 맞게 배너 이름 수정
-        self.banner_data = {
-            "1": {"name": "상시 배너", "data": [], "stats": {}},          # 상시 배너 (실제 API gacha_type=1)
-            "2": {"name": "광추 배너", "data": [], "stats": {}},          # 무기 배너 (실제 API gacha_type=2)
-            "3": {"name": "이벤트 배너", "data": [], "stats": {}},        # 캐릭터 이벤트 배너 (실제 API gacha_type=3)
-            "11": {"name": "이벤트 배너 (한정)", "data": [], "stats": {}}, # 한정 이벤트 배너 (실제 API gacha_type=11)
-            "21": {"name": "콜라보 배너", "data": [], "stats": {}},       # 콜라보 이벤트 배너 (실제 API gacha_type=21)
-            "22": {"name": "콜라보 광추", "data": [], "stats": {}}        # 콜라보 광추 배너 (실제 API gacha_type=22)
-        }
+        # 실제 스타레일 배너 타입 전체 포함 (콜라보 배너 포함)
+        self.banner_data = OrderedDict([
+            ("11", {"name": "한정 캐릭터 배너", "data": [], "stats": {}}),    # CHARACTER = '11' (실제 데이터 확인됨: 917개)
+            ("12", {"name": "한정 광추 배너", "data": [], "stats": {}}),      # LIGHT_CONE = '12' (광추 UP 배너)
+            ("21", {"name": "콜라보 캐릭터 배너", "data": [], "stats": {}}), # 콜라보 캐릭터 배너 (Rust 코드에서 확인됨)
+            ("22", {"name": "콜라보 광추 배너", "data": [], "stats": {}}),   # 콜라보 광추 배너 (Rust 코드에서 확인됨)
+            ("1", {"name": "상시 배너", "data": [], "stats": {}}),          # STELLAR = '1' (실제 데이터 확인됨: 222개)
+            ("2", {"name": "초보자 배너", "data": [], "stats": {}})         # DEPARTURE = '2' (초보자 배너)
+        ])
         
         # 에러 핸들러 추가
         self.error_handler = ErrorHandler()
@@ -911,19 +910,17 @@ class ModernGachaViewer:
         print(f"✅ 검증 성공")
     
     async def _fetch_banners_data(self, gacha_link: str, api_lang: str):
-        """배너별 데이터 조회 - Rust 코드에서 확인된 실제 배너 타입 사용"""
-        # 기본 배너들 (항상 존재)
-        basic_banner_ids = ["1", "2", "3", "11"]
+        """배너별 데이터 조회 - 콜라보 배너 포함 전체 6개 배너 조회"""
+        # 전체 배너를 순서대로 조회 (콜라보 배너 포함)
+        all_banner_ids = ["11", "12", "21", "22", "1", "2"]  # CHARACTER, LIGHT_CONE, 콜라보캐릭, 콜라보광추, STELLAR, DEPARTURE
         
-        # 콜라보 배너들 (존재할 수도 있음) - Rust 코드에서 확인된 타입
-        collaboration_banner_ids = ["21", "22"]
-        
-        # 기본 배너 조회
-        for i, banner_id in enumerate(basic_banner_ids):
+        for i, banner_id in enumerate(all_banner_ids):
             banner_name = self.banner_data[banner_id]["name"]
-            self.update_progress(0.2 + (i * 0.15), f"📊 {banner_name} 조회 중...")
+            progress_value = 0.2 + (i * 0.12)  # 6개 배너에 맞게 진행률 조정
+            self.update_progress(progress_value, f"📊 {banner_name} 조회 중...")
             
             try:
+                print(f"\n🔍 === {banner_name} (타입 {banner_id}) 조회 시작 ===")
                 new_data = await self._fetch_banner_data(gacha_link, banner_id, api_lang)
                 new_items_added = self.merge_new_data(banner_id, new_data)
                 
@@ -931,66 +928,57 @@ class ModernGachaViewer:
                 self._update_banner_display(banner_id)
                 
                 total_items = len(self.banner_data[banner_id]["data"])
-                self.update_progress(0.2 + (i * 0.15) + 0.03, 
-                    f"📊 {banner_name}: {total_items}개 기록 (+{new_items_added}개 신규)")
+                
+                if total_items > 0:
+                    status_msg = f"✅ {banner_name}: {total_items}개 기록 (+{new_items_added}개 신규)"
+                    print(f"✅ {banner_name} 조회 완료: {total_items}개 기록")
+                else:
+                    status_msg = f"ℹ️ {banner_name}: 기록 없음"
+                    print(f"ℹ️ {banner_name}: 기록 없음")
+                    
+                self.update_progress(progress_value + 0.02, status_msg)
+                
+                # API 호출 간격을 늘려서 -110 오류 방지
+                await asyncio.sleep(1.5)
                     
             except Exception as e:
                 print(f"❌ {banner_name} 조회 실패: {e}")
+                self.update_progress(progress_value + 0.02, f"❌ {banner_name}: 조회 실패")
                 continue
-        
-        # 콜라보 배너 조회 (있으면 조회, 없으면 건너뛰기) - 올바른 타입 사용
-        collaboration_progress_start = 0.8
-        for i, banner_id in enumerate(collaboration_banner_ids):
-            if banner_id in self.banner_data:
-                try:
-                    banner_name = self.banner_data[banner_id]["name"]
-                    self.update_progress(collaboration_progress_start + (i * 0.05), f"🔍 {banner_name} 확인 중...")
-                    print(f"🔍 {banner_name} (타입 {banner_id}) 존재 여부 확인 중...")
-                    
-                    new_data = await self._fetch_banner_data(gacha_link, banner_id, api_lang)
-                    if new_data:  # 데이터가 있으면 처리
-                        new_items_added = self.merge_new_data(banner_id, new_data)
-                        self._calculate_banner_stats(banner_id)
-                        self._update_banner_display(banner_id)
-                        print(f"✅ {banner_name}: {len(new_data)}개 기록 발견")
-                        self.update_progress(collaboration_progress_start + (i * 0.05) + 0.02, 
-                            f"✅ {banner_name}: {len(new_data)}개 기록 (+{new_items_added}개 신규)")
-                    else:
-                        print(f"ℹ️ {banner_name}: 기록 없음")
-                        self.update_progress(collaboration_progress_start + (i * 0.05) + 0.02, 
-                            f"ℹ️ {banner_name}: 기록 없음")
-                        
-                except Exception as e:
-                    print(f"ℹ️ {banner_name} 배너는 현재 존재하지 않습니다: {e}")
-                    self.update_progress(collaboration_progress_start + (i * 0.05) + 0.02, 
-                        f"ℹ️ {banner_name}: 미지원")
-                    continue
-    
+
     async def _fetch_banner_data(self, gacha_link: str, banner_id: str, api_lang: str) -> List[Any]:
-        """개별 배너 데이터 조회 - Rust 코드에서 확인된 실제 배너 타입 매핑"""
+        """개별 배너 데이터 조회 - 콜라보 배너 포함 전체 배너 매핑"""
         api = GachaAPI(gacha_link)
         
-        # Rust 코드에서 확인된 실제 스타레일 API 배너 타입 매핑
+        # 콜라보 배너 포함 전체 배너 타입 매핑
         banner_type_map = {
-            "1": "1",   # 상시 배너 (실제 데이터 확인됨)
-            "2": "2",   # 광추 배너 (무기)
-            "3": "3",   # 이벤트 배너 (캐릭터) 
-            "11": "11", # 한정 이벤트 배너 (실제 데이터 확인됨)
-            "21": "21", # 콜라보 이벤트 배너 (Rust 코드에서 확인됨)
-            "22": "22"  # 콜라보 광추 배너 (Rust 코드에서 확인됨)
+            "11": "11", # CHARACTER = '11' - 한정 캐릭터 배너 (실제 데이터 확인됨)
+            "12": "12", # LIGHT_CONE = '12' - 한정 광추 배너 
+            "21": "21", # 콜라보 캐릭터 배너 (Rust 코드에서 확인됨)
+            "22": "22", # 콜라보 광추 배너 (Rust 코드에서 확인됨)
+            "1": "1",   # STELLAR = '1' - 상시 배너 (실제 데이터 확인됨)
+            "2": "2"    # DEPARTURE = '2' - 초보자 배너
         }
         
         gacha_type = banner_type_map.get(banner_id, banner_id)
         print(f"🔍 배너 {banner_id} ({self.banner_data[banner_id]['name']}) -> gacha_type {gacha_type} 조회 시작")
         
+        # 모든 배너에 대해 강제로 조회 시도
         records = await api.fetch_gacha_records(gacha_type, api_lang)
         print(f"📊 배너 {banner_id}: {len(records)}개 기록 조회됨")
         
-        # API 응답에서 실제 gacha_type과 첫 번째 아이템 확인
+        # API 응답 상세 정보 출력
         if records:
             actual_gacha_type = records[0].get("gacha_type", "unknown")
             first_item_name = records[0].get("name", "unknown")
-            print(f"✅ 실제 API 응답 gacha_type: {actual_gacha_type}, 첫 번째 아이템: {first_item_name}")
+            first_item_rank = records[0].get("rank_type", "unknown")
+            print(f"✅ 실제 API 응답 - gacha_type: {actual_gacha_type}, 첫 아이템: {first_item_name} ({first_item_rank}성)")
+        else:
+            # 빈 결과도 시도해보기 위해 다른 언어로 재시도
+            if api_lang != "en":
+                print(f"🔄 언어를 'en'으로 변경하여 재시도...")
+                records = await api.fetch_gacha_records(gacha_type, "en")
+                print(f"📊 영어로 재시도 결과: {len(records)}개 기록")
         
         # 레코드를 객체로 변환
         converted_records = []
@@ -1062,124 +1050,295 @@ class ModernGachaViewer:
         self.banner_data[banner_id]["stats"] = stats
     
     def _update_banner_display(self, banner_id):
-        """배너 화면 업데이트"""
+        """배너 화면 업데이트 - 시각적으로 개선된 버전 (타입 안전성 강화)"""
         tab_info = self.banner_tabs[banner_id]
         data = self.banner_data[banner_id]["data"]
         stats = self.banner_data[banner_id]["stats"]
         
-        # 통계 업데이트
-        if stats:
-            avg_interval = sum(stats["5star_intervals"]) / len(stats["5star_intervals"]) if stats["5star_intervals"] else 0
+        # 통계 업데이트 - 더 시각적으로 (타입 체크 추가)
+        if stats and stats.get('total', 0) > 0:
+            total = stats.get('total', 0)
+            five_star = stats.get('5star', 0)
+            four_star = stats.get('4star', 0)
+            three_star = stats.get('3star', 0)
             
+            avg_interval = 0
+            if stats.get("5star_intervals"):
+                avg_interval = sum(stats["5star_intervals"]) / len(stats["5star_intervals"])
+            
+            # 안전한 나눗셈과 타입 체크
+            try:
+                five_star_rate = (five_star / max(total, 1)) * 100
+                four_star_rate = (four_star / max(total, 1)) * 100
+                three_star_rate = (three_star / max(total, 1)) * 100
+            except (TypeError, ZeroDivisionError):
+                five_star_rate = four_star_rate = three_star_rate = 0
+            
+            # 시각적 표현을 위한 안전한 계산
+            try:
+                fire_icons = min(int(five_star), 10)
+                purple_icons = min(int(four_star) // 10, 10)
+                white_icons = min(int(three_star) // 100, 10)
+                pity_count = stats.get('pity_count', 0)
+                green_bars = max(0, (90 - int(pity_count)) // 10)
+                yellow_bars = min(int(pity_count) // 10, 9)
+            except (TypeError, ValueError):
+                fire_icons = purple_icons = white_icons = green_bars = yellow_bars = 0
+                pity_count = 0
+            
+            # 통계를 더 시각적으로 표현
             stats_text = f"""📊 {self.banner_data[banner_id]["name"]} 통계
 
-🎯 총 가챠 횟수: {stats['total']}회
-⭐ 5성: {stats['5star']}개 ({stats['5star']/stats['total']*100:.1f}%)
-🌟 4성: {stats['4star']}개 ({stats['4star']/stats['total']*100:.1f}%)
-✨ 3성: {stats['3star']}개 ({stats['3star']/stats['total']*100:.1f}%)
+🎯 총 가챠 횟수: {total:,}회
 
-🔥 현재 천장까지: {stats['pity_count']}회
+⭐ 5성: {five_star}개 ({five_star_rate:.1f}%) {'🔥' * fire_icons}
+🌟 4성: {four_star}개 ({four_star_rate:.1f}%) {'💜' * purple_icons}
+✨ 3성: {three_star}개 ({three_star_rate:.1f}%) {'⚪' * white_icons}
+
+🔥 현재 천장까지: {pity_count}회 {'🟩' * green_bars + '🟨' * yellow_bars}
 💎 평균 5성 간격: {avg_interval:.1f}회"""
 
-            if stats["5star_intervals"]:
+            if stats.get("5star_intervals"):
                 min_interval = min(stats["5star_intervals"])
                 max_interval = max(stats["5star_intervals"])
                 stats_text += f"\n📈 최단/최장 간격: {min_interval}회 / {max_interval}회"
+                
+            # 운 평가 추가 (안전한 계산)
+            if total > 0:
+                try:
+                    luck_score = five_star_rate
+                    if luck_score >= 2.0:
+                        luck_emoji = "🍀✨ 대박 운!"
+                    elif luck_score >= 1.6:
+                        luck_emoji = "🎉 좋은 운!"
+                    elif luck_score >= 1.0:
+                        luck_emoji = "😊 평균 운"
+                    else:
+                        luck_emoji = "😔 아쉬운 운..."
+                    stats_text += f"\n\n🎰 운빨 지수: {luck_emoji}"
+                except (TypeError, ValueError):
+                    stats_text += f"\n\n🎰 운빨 지수: 😊 계산 중..."
         else:
-            stats_text = "데이터가 없습니다."
+            stats_text = "🎯 아직 데이터가 없습니다.\n\n가챠를 뽑고 조회해보세요!"
         
         tab_info["stats_text"].configure(state="normal")
         tab_info["stats_text"].delete("0.0", "end")
         tab_info["stats_text"].insert("0.0", stats_text)
         tab_info["stats_text"].configure(state="disabled")
         
-        # 기록 업데이트
+        # 기록 업데이트 - 더 시각적으로
         if data:
-            records_text = "📜 가챠 기록 (최신순)\n\n"
+            records_text = "🎊 가챠 기록 (최신순)\n" + "="*50 + "\n\n"
             
             five_star_positions = []
             for i, item in enumerate(data):
                 if item:
-                    item_rank = getattr(item, 'rank', 3)
-                    if str(item_rank) == "5":
-                        five_star_positions.append(i)
+                    try:
+                        item_rank = getattr(item, 'rank', 3)
+                        if str(item_rank) == "5":
+                            five_star_positions.append(i)
+                    except:
+                        continue
             
-            for i, item in enumerate(data[:10]):
+            display_count = min(len(data), 15)  # 15개로 제한
+            for i in range(display_count):
+                item = data[i]
                 if not item:
                     continue
                     
-                item_rank = getattr(item, 'rank', 3)
-                item_name = getattr(item, 'name', 'Unknown')
-                item_time = getattr(item, 'time', '')
-                
                 try:
-                    star_icon = "⭐" * int(item_rank) if isinstance(item_rank, (int, str)) else "⭐"
-                except:
-                    star_icon = "⭐"
-                
-                interval_info = ""
-                if str(item_rank) == "5" and i in five_star_positions:
+                    item_rank = getattr(item, 'rank', 3)
+                    item_name = getattr(item, 'name', 'Unknown')
+                    item_time = getattr(item, 'time', '')
+                    
+                    # 등급별 시각적 표현
+                    if str(item_rank) == "5":
+                        rank_display = "⭐⭐⭐⭐⭐"
+                        prefix = "🌟"
+                        name_style = f"【{item_name}】"
+                        border = "╔" + "═" * 30 + "╗"
+                        records_text += f"{border}\n"
+                    elif str(item_rank) == "4":
+                        rank_display = "⭐⭐⭐⭐"
+                        prefix = "💜"
+                        name_style = f"『{item_name}』"
+                    else:
+                        rank_display = "⭐⭐⭐"
+                        prefix = "🔹"
+                        name_style = item_name
+                    
+                    # 천장 정보 (안전한 계산)
+                    interval_info = ""
+                    if str(item_rank) == "5" and i in five_star_positions:
+                        try:
+                            pos_in_5star = five_star_positions.index(i)
+                            if pos_in_5star > 0:
+                                prev_5star_pos = five_star_positions[pos_in_5star - 1]
+                                interval = i - prev_5star_pos
+                                if interval <= 10:
+                                    interval_info = f" 🍀 초대박 {interval}뽑!"
+                                elif interval <= 30:
+                                    interval_info = f" 🎉 대박 {interval}뽑!"
+                                elif interval <= 60:
+                                    interval_info = f" 😊 {interval}뽑"
+                                else:
+                                    interval_info = f" 😭 {interval}뽑..."
+                        except (ValueError, IndexError):
+                            interval_info = ""
+                    
+                    # 시간 포맷팅 (안전한 처리)
                     try:
-                        pos_in_5star = five_star_positions.index(i)
-                        if pos_in_5star > 0:
-                            prev_5star_pos = five_star_positions[pos_in_5star - 1]
-                            interval = i - prev_5star_pos
-                            interval_info = f" [+{interval}회]"
+                        from datetime import datetime
+                        time_obj = datetime.strptime(item_time, "%Y-%m-%d %H:%M:%S")
+                        time_display = time_obj.strftime("%m/%d %H:%M")
                     except:
-                        interval_info = ""
-                
-                if str(item_rank) == "5":
-                    prefix = "🌟"
-                elif str(item_rank) == "4":
-                    prefix = "💜"
-                else:
-                    prefix = "🔹"
-                
-                records_text += f"{i+1:3d}. {prefix} {star_icon} {item_name}{interval_info}\n     📅 {item_time}\n\n"
+                        time_display = str(item_time)[:16] if item_time else "알 수 없음"
+                    
+                    records_text += f"{i+1:2d}. {prefix} {rank_display} {name_style}{interval_info}\n"
+                    records_text += f"     📅 {time_display}\n"
+                    
+                    if str(item_rank) == "5":
+                        records_text += "╚" + "═" * 30 + "╝\n"
+                    
+                    records_text += "\n"
+                    
+                except Exception as e:
+                    print(f"기록 표시 중 오류 (항목 {i}): {e}")
+                    continue
             
-            if len(data) > 10:
-                records_text += f"... 및 {len(data)-10}개 기록 더"
+            if len(data) > 15:
+                records_text += f"📦 ... 및 {len(data)-15}개 기록 더 있습니다"
         else:
-            records_text = "기록이 없습니다."
+            records_text = """🎯 아직 가챠 기록이 없습니다!
+
+🎮 가챠를 뽑으러 가세요:
+   1. 게임 실행
+   2. 워프 메뉴 진입
+   3. 가챠 뽑기!
+   4. 다시 조회하기
+
+🍀 행운을 빕니다! 🍀"""
         
         tab_info["records_text"].configure(state="normal")
         tab_info["records_text"].delete("0.0", "end")
         tab_info["records_text"].insert("0.0", records_text)
         tab_info["records_text"].configure(state="disabled")
-    
+
     def _update_summary_display(self):
-        """통합 통계 업데이트"""
-        summary_text = "📊 전체 가챠 통계 요약\n\n"
+        """통합 통계 업데이트 - 시각적으로 개선된 버전 (타입 안전성 강화)"""
+        summary_text = "🎊 전체 가챠 통계 대시보드 🎊\n" + "="*60 + "\n\n"
         
         total_all = 0
         total_5star = 0
         total_4star = 0
         total_3star = 0
         
+        # 배너별 상세 통계 (안전한 계산)
         for banner_id, banner_info in self.banner_data.items():
             stats = banner_info.get("stats", {})
-            if stats:
+            if stats and stats.get('total', 0) > 0:
                 banner_name = banner_info["name"]
-                summary_text += f"🎯 {banner_name}:\n"
-                summary_text += f"  총 {stats['total']}회 | "
-                summary_text += f"5성 {stats['5star']}개 | "
-                summary_text += f"4성 {stats['4star']}개 | "
-                summary_text += f"3성 {stats['3star']}개\n\n"
                 
-                total_all += stats['total']
-                total_5star += stats['5star']
-                total_4star += stats['4star']
-                total_3star += stats['3star']
+                try:
+                    total = int(stats.get('total', 0))
+                    five_star = int(stats.get('5star', 0))
+                    four_star = int(stats.get('4star', 0))
+                    three_star = int(stats.get('3star', 0))
+                    
+                    # 5성 확률 계산 (안전한 나눗셈)
+                    five_star_rate = (five_star / max(total, 1)) * 100
+                    
+                    # 운빨 평가
+                    if five_star_rate >= 2.0:
+                        luck_icon = "🍀🎉"
+                    elif five_star_rate >= 1.6:
+                        luck_icon = "🎉"
+                    elif five_star_rate >= 1.0:
+                        luck_icon = "😊"
+                    else:
+                        luck_icon = "😔"
+                    
+                    summary_text += f"🎯 {banner_name} {luck_icon}\n"
+                    summary_text += f"   총 {total:,}회 | 5성 {five_star}개 ({five_star_rate:.1f}%) | 4성 {four_star}개 | 3성 {three_star}개\n"
+                    
+                    # 현재 천장 상태 (안전한 처리)
+                    pity = int(stats.get('pity_count', 0))
+                    if pity >= 80:
+                        pity_status = f"🔥 천장 임박! ({pity}/90)"
+                    elif pity >= 60:
+                        pity_status = f"🟨 천장 접근 ({pity}/90)"
+                    elif pity >= 30:
+                        pity_status = f"🟩 안전구간 ({pity}/90)"
+                    else:
+                        pity_status = f"✅ 초기구간 ({pity}/90)"
+                    
+                    summary_text += f"   천장: {pity_status}\n\n"
+                    
+                    total_all += total
+                    total_5star += five_star
+                    total_4star += four_star
+                    total_3star += three_star
+                    
+                except (TypeError, ValueError, ZeroDivisionError) as e:
+                    print(f"통계 계산 오류 ({banner_name}): {e}")
+                    summary_text += f"🎯 {banner_name}: 데이터 처리 중...\n\n"
+                    continue
         
         if total_all > 0:
-            summary_text += f"🌟 전체 통계:\n"
-            summary_text += f"  총 가챠 횟수: {total_all}회\n"
-            summary_text += f"  5성 비율: {total_5star/total_all*100:.2f}% ({total_5star}개)\n"
-            summary_text += f"  4성 비율: {total_4star/total_all*100:.2f}% ({total_4star}개)\n"
-            summary_text += f"  3성 비율: {total_3star/total_all*100:.2f}% ({total_3star}개)\n\n"
-            
-            summary_text += f"💎 평균 5성 획득까지: {total_all/max(total_5star,1):.1f}회\n"
-            summary_text += f"💫 평균 4성 획득까지: {total_all/max(total_4star,1):.1f}회"
+            try:
+                overall_rate = (total_5star / total_all) * 100
+                
+                summary_text += "🌟" + "="*50 + "🌟\n"
+                summary_text += f"🎊 전체 종합 통계\n\n"
+                summary_text += f"💎 총 가챠 횟수: {total_all:,}회\n"
+                summary_text += f"⭐ 5성 비율: {overall_rate:.2f}% ({total_5star}개) {'🔥' * min(total_5star, 10)}\n"
+                summary_text += f"🌟 4성 비율: {(total_4star/total_all)*100:.2f}% ({total_4star}개)\n"
+                summary_text += f"✨ 3성 비율: {(total_3star/total_all)*100:.2f}% ({total_3star}개)\n\n"
+                
+                # 전체 평가
+                if overall_rate >= 2.0:
+                    overall_assessment = "🍀✨ 전설적인 운빨!"
+                elif overall_rate >= 1.8:
+                    overall_assessment = "🎉🔥 엄청난 운빨!"
+                elif overall_rate >= 1.6:
+                    overall_assessment = "🎊 좋은 운빨!"
+                elif overall_rate >= 1.2:
+                    overall_assessment = "😊 괜찮은 운빨"
+                elif overall_rate >= 0.8:
+                    overall_assessment = "😐 평범한 운빨"
+                else:
+                    overall_assessment = "😭 아쉬운 운빨..."
+                
+                summary_text += f"🎰 종합 운빨 평가: {overall_assessment}\n"
+                summary_text += f"📊 평균 5성까지: {total_all/max(total_5star,1):.1f}회\n"
+                summary_text += f"💫 평균 4성까지: {total_all/max(total_4star,1):.1f}회"
+                
+                # 목표 달성도
+                if total_5star >= 50:
+                    achievement = "🏆 5성 컬렉터 마스터!"
+                elif total_5star >= 20:
+                    achievement = "🥇 5성 컬렉터!"
+                elif total_5star >= 10:
+                    achievement = "🥈 5성 애호가!"
+                elif total_5star >= 5:
+                    achievement = "🥉 5성 초보자!"
+                else:
+                    achievement = "🌱 이제 시작이야!"
+                
+                summary_text += f"\n\n🏅 달성도: {achievement}"
+                
+            except (TypeError, ValueError, ZeroDivisionError) as e:
+                print(f"전체 통계 계산 오류: {e}")
+                summary_text += "📊 통계 계산 중..."
+        else:
+            summary_text += """🎯 아직 가챠 데이터가 없습니다!
+
+🎮 가챠를 뽑고 통계를 확인해보세요:
+   1. 게임에서 워프 진행
+   2. '모든 배너 조회' 클릭
+   3. 멋진 통계 확인!
+
+🍀 좋은 결과 있기를! 🍀"""
         
         self.summary_text.configure(state="normal")
         self.summary_text.delete("0.0", "end")
@@ -1596,4 +1755,5 @@ def get_gacha_link_from_powershell_script() -> Optional[str]:
 
 if __name__ == "__main__":
     app = ModernGachaViewer()
+    app.run()
     app.run()
