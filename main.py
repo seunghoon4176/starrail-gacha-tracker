@@ -20,7 +20,7 @@ import time
 #자체 모듈
 from GachaLinkFinder import GachaLinkFinder
 from GachaAPI import GachaAPI
-from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_logs, get_gacha_link_from_powershell_script
+from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_logs
 from ErrorHandler import ErrorHandler
 from CacheFileManager import get_gacha_link_from_game_cache
 
@@ -109,9 +109,6 @@ class ModernGachaViewer:
         # 간단한 컨트롤 패널
         self.create_simple_control_panel()
         
-        # 진행 상태
-        self.create_progress_section()
-        
         # 탭뷰
         self.create_tabview()
         
@@ -121,15 +118,15 @@ class ModernGachaViewer:
     def create_simple_control_panel(self):
         """간단한 컨트롤 패널 생성"""
         control_frame = ctk.CTkFrame(self.main_container)
-        control_frame.pack(fill="x", padx=10, pady=(10, 20))
-        
-        # 상단 컨트롤 (조회 버튼과 설정 버튼만)
-        top_control = ctk.CTkFrame(control_frame)
-        top_control.pack(fill="x", padx=15, pady=15)
-        
-        # 조회 버튼을 왼쪽에 배치
+        control_frame.pack(fill="x", padx=10, pady=(10, 0))
+
+        # 한 줄에: 모든 배너 조회, 설정, 프로그레스 바
+        row_frame = ctk.CTkFrame(control_frame)
+        row_frame.pack(fill="x", padx=15, pady=10)
+
+        # 조회 버튼 (왼쪽)
         self.fetch_all_btn = ctk.CTkButton(
-            top_control,
+            row_frame,
             text="🎯 모든 배너 조회",
             command=self.fetch_all_banners,
             width=180,
@@ -137,11 +134,11 @@ class ModernGachaViewer:
             font=ctk.CTkFont(size=16, weight="bold"),
             state="normal"
         )
-        self.fetch_all_btn.pack(side="left", padx=(0, 20))
-        
-        # 설정 버튼을 오른쪽에 배치
+        self.fetch_all_btn.pack(side="left", padx=(0, 10))
+
+        # 설정 버튼 (중간)
         settings_btn = ctk.CTkButton(
-            top_control,
+            row_frame,
             text="⚙️ 설정",
             command=self.open_settings,
             width=100,
@@ -149,31 +146,22 @@ class ModernGachaViewer:
             fg_color="gray50",
             hover_color="gray40"
         )
-        settings_btn.pack(side="right", padx=(0, 0))
-        
+        settings_btn.pack(side="left", padx=(0, 10))
 
-
-    def create_progress_section(self):
-        """진행 상태 섹션 생성 (컴팩트하게)"""
-        progress_frame = ctk.CTkFrame(self.main_container)
-        progress_frame.pack(fill="x", padx=10, pady=(0, 10))
-        
-        # 프로그레스 바와 상태를 한 줄에
-        progress_container = ctk.CTkFrame(progress_frame)
-        progress_container.pack(fill="x", padx=15, pady=10)
-        
-        self.progress_bar = ctk.CTkProgressBar(progress_container, height=16)
-        self.progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 15))
+        # 프로그레스 바 (오른쪽, 남은 공간 모두 차지)
+        self.progress_bar = ctk.CTkProgressBar(row_frame, height=16)
+        self.progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.progress_bar.set(0)
-        
+
+        # 상태 라벨 (맨 오른쪽)
         self.status_label = ctk.CTkLabel(
-            progress_container,
+            row_frame,
             text="📝 대기 중...",
             font=ctk.CTkFont(size=12),
             width=200
         )
-        self.status_label.pack(side="right")
-        
+        self.status_label.pack(side="left")
+
     def create_tabview(self):
         """탭뷰 생성"""
         self.tabview = ctk.CTkTabview(self.main_container)
@@ -190,36 +178,48 @@ class ModernGachaViewer:
     def create_banner_tab(self, banner_id, banner_name):
         """배너별 탭 생성"""
         tab = self.tabview.add(banner_name)
-        
+
         # 통계 프레임 (더 작게)
         stats_frame = ctk.CTkFrame(tab)
         stats_frame.pack(fill="x", padx=10, pady=10)
-        
+
         stats_label = ctk.CTkLabel(
             stats_frame,
             text="📊 통계",
             font=ctk.CTkFont(size=16, weight="bold")
         )
         stats_label.pack(anchor="w", padx=15, pady=(15, 5))
-        
+
         stats_text = ctk.CTkTextbox(stats_frame, height=120)
         stats_text.pack(fill="x", padx=15, pady=(0, 15))
         stats_text.configure(state="disabled")  # 사용자 입력 방지
-        
+
         # 기록 프레임 (훨씬 더 크게)
         records_frame = ctk.CTkFrame(tab)
         records_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        
+
         records_label = ctk.CTkLabel(
             records_frame,
             text="📜 가챠 기록",
             font=ctk.CTkFont(size=16, weight="bold")
         )
         records_label.pack(anchor="w", padx=15, pady=(15, 5))
-        
-        # 페이지네이션 컨트롤 프레임 추가
+
+        # 기록 텍스트 (상단)
+        records_text = ctk.CTkTextbox(
+            records_frame, 
+            height=450,
+            font=ctk.CTkFont(size=13)
+        )
+        records_text.pack(fill="both", expand=True, padx=15, pady=(0, 5))
+        records_text.configure(state="disabled")  # 사용자 입력 방지
+
+        # 페이지네이션 컨트롤 프레임 (맨 아래, 가운데 정렬)
         pagination_frame = ctk.CTkFrame(records_frame)
-        pagination_frame.pack(fill="x", padx=15, pady=(0, 5))
+        pagination_frame.pack(fill="x", padx=15, pady=(0, 10), side="bottom")
+        pagination_frame.grid_columnconfigure(0, weight=1)
+        pagination_frame.grid_columnconfigure(1, weight=0)
+        pagination_frame.grid_columnconfigure(2, weight=1)
 
         prev_btn = ctk.CTkButton(
             pagination_frame,
@@ -227,14 +227,14 @@ class ModernGachaViewer:
             width=80,
             command=lambda bid=banner_id: self.change_page(bid, -1)
         )
-        prev_btn.pack(side="left", padx=(0, 10))
+        prev_btn.grid(row=0, column=0, sticky="e", padx=(0, 10))
 
         page_label = ctk.CTkLabel(
             pagination_frame,
             text="1 / 1",
             width=80
         )
-        page_label.pack(side="left", padx=(0, 10))
+        page_label.grid(row=0, column=1, sticky="nsew")
 
         next_btn = ctk.CTkButton(
             pagination_frame,
@@ -242,16 +242,8 @@ class ModernGachaViewer:
             width=80,
             command=lambda bid=banner_id: self.change_page(bid, 1)
         )
-        next_btn.pack(side="left")
+        next_btn.grid(row=0, column=2, sticky="w", padx=(10, 0))
 
-        records_text = ctk.CTkTextbox(
-            records_frame, 
-            height=450,
-            font=ctk.CTkFont(size=13)
-        )
-        records_text.pack(fill="both", expand=True, padx=15, pady=(0, 15))
-        records_text.configure(state="disabled")  # 사용자 입력 방지
-        
         # 탭 정보 저장
         self.banner_tabs[banner_id] = {
             "tab": tab,
@@ -354,12 +346,15 @@ class ModernGachaViewer:
     
     def fetch_all_banners(self):
         """모든 배너 조회"""
+        # 조회 중에는 버튼 비활성화
+        self.fetch_all_btn.configure(state="disabled")
         def run_fetch():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self._fetch_all_banners_async())
             loop.close()
-        
+            # 조회 완료 후 버튼 다시 활성화 (메인스레드에서 실행)
+            self.root.after(0, lambda: self.fetch_all_btn.configure(state="normal"))
         thread = threading.Thread(target=run_fetch, daemon=True)
         thread.start()
     
@@ -404,24 +399,19 @@ class ModernGachaViewer:
     
     async def _find_gacha_link(self) -> Optional[str]:
         """가챠 링크 검색"""
-        # 1. PowerShell 스크립트 검색 (우선순위 최고)
-        self.update_progress(0.03, "🔍 PowerShell 스크립트 검색 중...")
-        link = get_gacha_link_from_powershell_script()
-        if link:
-            return link
-        
-        # 2. 레지스트리 검색
+        # 1. 레지스트리 검색
         self.update_progress(0.05, "🔍 레지스트리 검색 중...")
         link = get_gacha_link_from_registry()
         if link:
             return link
         
-        # 3. 로그 파일 검색
+        # 2. 로그 파일 검색
         self.update_progress(0.07, "🔍 게임 로그 검색 중...")
+        link = get_gacha_link_from_logs()
         if link:
             return link
         
-        # 4. 게임 캐시 검색
+        # 3. 게임 캐시 검색
         self.update_progress(0.08, "🔍 게임 캐시 검색 중...")
         link = get_gacha_link_from_game_cache()
         if link:
@@ -437,7 +427,13 @@ class ModernGachaViewer:
         is_valid = await api.validate_link()
         
         if not is_valid:
-            raise Exception("가챠 기록을 찾을 수 없습니다 - 게임에서 가챠 기록을 먼저 확인하세요")
+            # retcode -101은 인증키 만료(유효기간 초과)임을 사용자에게 안내
+            message = (
+                "가챠 기록을 찾을 수 없습니다 - 게임에서 가챠 기록을 먼저 확인하세요.\n\n"
+                "또는 인증키(authkey)가 만료되었습니다.\n"
+                "게임을 실행한 후 워프(가챠) 기록을 한 번 열고 다시 시도하세요."
+            )
+            raise Exception(message)
         
         print(f"✅ 검증 성공")
     
@@ -581,83 +577,96 @@ class ModernGachaViewer:
         
         self.banner_data[banner_id]["stats"] = stats
     
+    def merge_new_data(self, banner_id, new_data):
+        """새로 조회한 데이터를 기존 데이터와 병합(중복 제거)하고 추가된 개수 반환"""
+        existing = self.banner_data[banner_id]["data"]
+        # id가 없는 데이터는 name+time으로 중복 체크
+        def item_key(item):
+            return (getattr(item, "id", None) or "", getattr(item, "name", ""), getattr(item, "time", ""))
+        existing_keys = set(item_key(item) for item in existing)
+        added = 0
+        for item in new_data:
+            key = item_key(item)
+            if key not in existing_keys:
+                existing.append(item)
+                existing_keys.add(key)
+                added += 1
+        # 최신순 정렬 (time, id 기준)
+        self.banner_data[banner_id]["data"] = sorted(
+            existing, key=lambda x: (getattr(x, "time", ""), getattr(x, "id", "")), reverse=True
+        )
+        return added
+
     def _update_banner_display(self, banner_id):
         """배너 화면 업데이트 - 시각적으로 개선된 버전 (타입 안전성 강화)"""
         tab_info = self.banner_tabs[banner_id]
         data = self.banner_data[banner_id]["data"]
         stats = self.banner_data[banner_id]["stats"]
-        
+
         # 통계 업데이트 - 더 시각적으로 (타입 체크 추가)
         if stats and stats.get('total', 0) > 0:
             total = stats.get('total', 0)
             five_star = stats.get('5star', 0)
             four_star = stats.get('4star', 0)
             three_star = stats.get('3star', 0)
-            
+
             avg_interval = 0
             if stats.get("5star_intervals"):
                 avg_interval = sum(stats["5star_intervals"]) / len(stats["5star_intervals"])
-            
-            # 안전한 나눗셈과 타입 체크
-            try:
-                five_star_rate = (five_star / max(total, 1)) * 100
-                four_star_rate = (four_star / max(total, 1)) * 100
-                three_star_rate = (three_star / max(total, 1)) * 100
-            except (TypeError, ZeroDivisionError):
-                five_star_rate = four_star_rate = three_star_rate = 0
-            
-            # 시각적 표현을 위한 안전한 계산
-            try:
-                fire_icons = min(int(five_star), 10)
-                purple_icons = min(int(four_star) // 10, 10)
-                white_icons = min(int(three_star) // 100, 10)
-                pity_count = stats.get('pity_count', 0)
-                green_bars = max(0, (90 - int(pity_count)) // 10)
-                yellow_bars = min(int(pity_count) // 10, 9)
-            except (TypeError, ValueError):
-                fire_icons = purple_icons = white_icons = green_bars = yellow_bars = 0
-                pity_count = 0
-            
-            # 통계를 더 시각적으로 표현
+
+            # 시각적 이모지 개선
+            fire_icons = "🟨" * min(int(five_star), 10) if five_star else "⬜"
+            purple_icons = "🟪" * min(int(four_star) // 10, 10) if four_star else "⬜"
+            white_icons = "⬜" * min(int(three_star) // 100, 10) if three_star else "⬜"
+            pity_count = stats.get('pity_count', 0)
+            green_bars = "🟩" * max(0, (90 - int(pity_count)) // 10)
+            yellow_bars = "🟨" * min(int(pity_count) // 10, 9)
+
             stats_text = f"""📊 {self.banner_data[banner_id]["name"]} 통계
 
 🎯 총 가챠 횟수: {total:,}회
 
-⭐ 5성: {five_star}개 ({five_star_rate:.1f}%) {'🔥' * fire_icons}
-🌟 4성: {four_star}개 ({four_star_rate:.1f}%) {'💜' * purple_icons}
-✨ 3성: {three_star}개 ({three_star_rate:.1f}%) {'⚪' * white_icons}
+⭐ 5성: {five_star}개 ({(five_star / max(total, 1)) * 100:.1f}%) {fire_icons}
+💜 4성: {four_star}개 ({(four_star / max(total, 1)) * 100:.1f}%) {purple_icons}
+✨ 3성: {three_star}개 ({(three_star / max(total, 1)) * 100:.1f}%) {white_icons}
 
-🔥 현재 천장까지: {pity_count}회 {'🟩' * green_bars + '🟨' * yellow_bars}
+🔥 현재 천장까지: {pity_count}회 {green_bars + yellow_bars}
 💎 평균 5성 간격: {avg_interval:.1f}회"""
 
             if stats.get("5star_intervals"):
                 min_interval = min(stats["5star_intervals"])
                 max_interval = max(stats["5star_intervals"])
                 stats_text += f"\n📈 최단/최장 간격: {min_interval}회 / {max_interval}회"
-                
+
             # 운 평가 추가 (안전한 계산)
             if total > 0:
                 try:
-                    luck_score = five_star_rate
+                    luck_score = (five_star / max(total, 1)) * 100
                     if luck_score >= 2.0:
-                        luck_emoji = "🍀✨ 대박 운!"
+                        luck_emoji = "🌈✨ 대박 운!"
                     elif luck_score >= 1.6:
-                        luck_emoji = "🎉 좋은 운!"
+                        luck_emoji = "🍀 좋은 운!"
                     elif luck_score >= 1.0:
                         luck_emoji = "😊 평균 운"
                     else:
-                        luck_emoji = "😔 아쉬운 운..."
+                        luck_emoji = "😢 아쉬운 운..."
                     stats_text += f"\n\n🎰 운빨 지수: {luck_emoji}"
                 except (TypeError, ValueError):
                     stats_text += f"\n\n🎰 운빨 지수: 😊 계산 중..."
         else:
-            stats_text = "🎯 아직 데이터가 없습니다.\n\n가챠를 뽑고 조회해보세요!"
-        
+            stats_text = (
+                f"📊 {self.banner_data[banner_id]['name']} 통계\n\n"
+                "❌ 가챠 기록이 없습니다.\n"
+                "게임에서 해당 배너의 가챠 기록을 한 번 열어주세요!\n"
+                "가챠를 뽑고 기록을 확인한 뒤 다시 조회해보세요.\n"
+                "행운을 빕니다! 🍀"
+            )
+
         tab_info["stats_text"].configure(state="normal")
         tab_info["stats_text"].delete("0.0", "end")
         tab_info["stats_text"].insert("0.0", stats_text)
         tab_info["stats_text"].configure(state="disabled")
-        
+
         # 페이지네이션 계산
         items_per_page = 15
         total_items = len(data)
@@ -687,7 +696,7 @@ class ModernGachaViewer:
                 item = data[i]
                 if not item:
                     continue
-                    
+
                 try:
                     item_rank = getattr(item, 'rank', 3)
                     item_name = getattr(item, 'name', 'Unknown')
@@ -747,15 +756,12 @@ class ModernGachaViewer:
                     continue
 
         else:
-            records_text = """🎯 아직 가챠 기록이 없습니다!
-
-🎮 가챠를 뽑으러 가세요:
-   1. 게임 실행
-   2. 워프 메뉴 진입
-   3. 가챠 뽑기!
-   4. 다시 조회하기
-
-🍀 행운을 빕니다! 🍀"""
+            records_text = (
+                "❌ 가챠 기록이 없습니다.\n"
+                "게임에서 해당 배너의 가챠 기록을 한 번 열어주세요!\n"
+                "가챠를 뽑고 기록을 확인한 뒤 다시 조회해보세요.\n"
+                "행운을 빕니다! 🍀"
+            )
 
         tab_info["records_text"].configure(state="normal")
         tab_info["records_text"].delete("0.0", "end")
@@ -835,7 +841,7 @@ class ModernGachaViewer:
         else:
             self.settings_theme_switch.deselect()
 
-        # 가챠 링크 획득 설정
+        # 가챠 링크 획득 안내만 표시 (파워쉘 관련 버튼/설명 제거)
         method_frame = ctk.CTkFrame(scrollable_frame)
         method_frame.pack(fill="x", padx=10, pady=10)
 
@@ -847,23 +853,11 @@ class ModernGachaViewer:
 
         info_label = ctk.CTkLabel(
             method_info_frame,
-            text="🔍 다음 순서로 자동 검색합니다:\n1. PowerShell 스크립트 (우선)\n2. Windows 레지스트리\n3. 게임 로그 파일\n4. 게임 웹 캐시",
+            text="🔍 다음 순서로 자동 검색합니다:\n1. Windows 레지스트리\n2. 게임 로그 파일\n3. 게임 웹 캐시",
             font=ctk.CTkFont(size=12),
             justify="left"
         )
         info_label.pack(anchor="w", padx=15, pady=10)
-
-        # PowerShell 스크립트 테스트 버튼
-        test_ps_btn = ctk.CTkButton(
-            method_info_frame,
-            text="🔧 PowerShell 스크립트 테스트",
-            command=self.test_powershell_script,
-            width=200,
-            height=30,
-            fg_color="blue",
-            hover_color="darkblue"
-        )
-        test_ps_btn.pack(anchor="w", padx=15, pady=(5, 10))
 
         help_btn = ctk.CTkButton(
             method_info_frame,
@@ -1017,19 +1011,6 @@ class ModernGachaViewer:
             print(f"설정 창 닫기 중 오류: {e}")
         finally:
             self.settings_window = None
-
-    def test_powershell_script(self):
-        """PowerShell 스크립트 테스트"""
-        def run_test():
-            link = get_gacha_link_from_powershell_script()
-            if link:
-                messagebox.showinfo("테스트 성공", f"✅ PowerShell 스크립트로 가챠 링크를 찾았습니다!\n\n링크: {link[:150]}...")
-            else:
-                messagebox.showwarning("테스트 실패", "❌ PowerShell 스크립트로 가챠 링크를 찾을 수 없습니다.\n\n게임을 실행하고 가챠 기록을 확인한 후 다시 시도하세요.")
-
-        # 별도 스레드에서 실행 (UI 블록킹 방지)
-        thread = threading.Thread(target=run_test, daemon=True)
-        thread.start()
 
     def update_link_status(self):
         """링크 상태를 UI에 표시 (조회 버튼 활성/비활성 등)"""
