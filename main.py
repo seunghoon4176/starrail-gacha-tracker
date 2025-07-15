@@ -48,8 +48,9 @@ class ModernGachaViewer:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("로컬 워프 트래커")
-        self.root.geometry("800x800")
-        self.root.resizable(False, False)
+        # 창 크기: 가로 720, 세로 1000으로 약간 더 키움 (잘림 방지)
+        self.root.geometry("720x950")
+        self.root.resizable(False, False)  # ← 리사이즈 가능 여부
         
         # 윈도우 아이콘 설정
         try:
@@ -102,14 +103,14 @@ class ModernGachaViewer:
         self.update_link_status()
         
     def setup_ui(self):
-        # 메인 컨테이너
+        # 메인 컨테이너 (여백 조정)
         self.main_container = ctk.CTkFrame(self.root)
-        self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
+        self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
         # 간단한 컨트롤 패널
         self.create_simple_control_panel()
         
-        # 탭뷰
+        # 탭뷰 (스크롤 가능하게)
         self.create_tabview()
         
         # 설정 창 초기화
@@ -118,11 +119,10 @@ class ModernGachaViewer:
     def create_simple_control_panel(self):
         """간단한 컨트롤 패널 생성"""
         control_frame = ctk.CTkFrame(self.main_container)
-        control_frame.pack(fill="x", padx=10, pady=(10, 0))
+        control_frame.pack(fill="x", padx=5, pady=(5, 0))
 
-        # 한 줄에: 모든 배너 조회, 설정, 프로그레스 바
         row_frame = ctk.CTkFrame(control_frame)
-        row_frame.pack(fill="x", padx=15, pady=10)
+        row_frame.pack(fill="x", padx=10, pady=8)
 
         # 조회 버튼 (왼쪽)
         self.fetch_all_btn = ctk.CTkButton(
@@ -130,27 +130,27 @@ class ModernGachaViewer:
             text="🎯 모든 배너 조회",
             command=self.fetch_all_banners,
             width=180,
-            height=40,
-            font=ctk.CTkFont(size=16, weight="bold"),
+            height=38,
+            font=ctk.CTkFont(size=15, weight="bold"),
             state="normal"
         )
-        self.fetch_all_btn.pack(side="left", padx=(0, 10))
+        self.fetch_all_btn.pack(side="left", padx=(0, 8))
 
         # 설정 버튼 (중간)
         settings_btn = ctk.CTkButton(
             row_frame,
             text="⚙️ 설정",
             command=self.open_settings,
-            width=100,
-            height=35,
+            width=90,
+            height=32,
             fg_color="gray50",
             hover_color="gray40"
         )
-        settings_btn.pack(side="left", padx=(0, 10))
+        settings_btn.pack(side="left", padx=(0, 8))
 
         # 프로그레스 바 (오른쪽, 남은 공간 모두 차지)
-        self.progress_bar = ctk.CTkProgressBar(row_frame, height=16)
-        self.progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.progress_bar = ctk.CTkProgressBar(row_frame, height=14)
+        self.progress_bar.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.progress_bar.set(0)
 
         # 상태 라벨 (맨 오른쪽)
@@ -158,14 +158,14 @@ class ModernGachaViewer:
             row_frame,
             text="📝 대기 중...",
             font=ctk.CTkFont(size=12),
-            width=200
+            width=180
         )
         self.status_label.pack(side="left")
 
     def create_tabview(self):
-        """탭뷰 생성"""
+        """탭뷰 생성 (스크롤 프레임 제거, 탭뷰만 사용)"""
         self.tabview = ctk.CTkTabview(self.main_container)
-        self.tabview.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self.tabview.pack(fill="both", expand=True, padx=0, pady=0)
         
         # 배너별 탭 생성
         self.banner_tabs = {}
@@ -179,72 +179,69 @@ class ModernGachaViewer:
         """배너별 탭 생성"""
         tab = self.tabview.add(banner_name)
 
-        # 통계 프레임 (더 작게)
+        # 통계 프레임 (상단)
         stats_frame = ctk.CTkFrame(tab)
-        stats_frame.pack(fill="x", padx=10, pady=10)
+        stats_frame.pack(fill="x", padx=10, pady=(10, 5))
 
         stats_label = ctk.CTkLabel(
             stats_frame,
             text="📊 통계",
             font=ctk.CTkFont(size=16, weight="bold")
         )
-        stats_label.pack(anchor="w", padx=15, pady=(15, 5))
+        stats_label.pack(anchor="w", padx=15, pady=(10, 2))
 
-        stats_text = ctk.CTkTextbox(stats_frame, height=120)
-        stats_text.pack(fill="x", padx=15, pady=(0, 15))
-        stats_text.configure(state="disabled")  # 사용자 입력 방지
+        stats_text = ctk.CTkTextbox(stats_frame, height=110)
+        stats_text.pack(fill="x", padx=15, pady=(0, 8))
+        stats_text.configure(state="disabled")
 
-        # 기록 프레임 (훨씬 더 크게)
+        # 페이지네이션 컨트롤 (통계와 기록 사이에 위치)
+        pagination_frame = ctk.CTkFrame(tab)
+        pagination_frame.pack(fill="x", padx=15, pady=(0, 5))
+        center_frame = ctk.CTkFrame(pagination_frame, fg_color="transparent")
+        center_frame.pack(anchor="center", expand=True)
+
+        prev_btn = ctk.CTkButton(
+            center_frame,
+            text="⬅ 이전",
+            width=80,
+            command=lambda bid=banner_id: self.change_page(bid, -1)
+        )
+        prev_btn.pack(side="left", padx=(0, 10))
+
+        page_label = ctk.CTkLabel(
+            center_frame,
+            text="1 / 1",
+            width=80
+        )
+        page_label.pack(side="left")
+
+        next_btn = ctk.CTkButton(
+            center_frame,
+            text="다음 ➡",
+            width=80,
+            command=lambda bid=banner_id: self.change_page(bid, 1)
+        )
+        next_btn.pack(side="left", padx=(10, 0))
+
+        # 기록 프레임 (중간)
         records_frame = ctk.CTkFrame(tab)
-        records_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        records_frame.pack(fill="both", expand=True, padx=10, pady=(0, 5))
 
         records_label = ctk.CTkLabel(
             records_frame,
             text="📜 가챠 기록",
             font=ctk.CTkFont(size=16, weight="bold")
         )
-        records_label.pack(anchor="w", padx=15, pady=(15, 5))
+        records_label.pack(anchor="w", padx=15, pady=(10, 2))
 
-        # 기록 텍스트 (상단)
         records_text = ctk.CTkTextbox(
-            records_frame, 
-            height=450,
-            font=ctk.CTkFont(size=13)
+            records_frame,
+            height=540,
+            font=ctk.CTkFont(size=14)
         )
         records_text.pack(fill="both", expand=True, padx=15, pady=(0, 5))
-        records_text.configure(state="disabled")  # 사용자 입력 방지
+        records_text.configure(state="disabled")
 
-        # 페이지네이션 컨트롤 프레임 (맨 아래, 가운데 정렬)
-        pagination_frame = ctk.CTkFrame(records_frame)
-        pagination_frame.pack(fill="x", padx=15, pady=(0, 10), side="bottom")
-        pagination_frame.grid_columnconfigure(0, weight=1)
-        pagination_frame.grid_columnconfigure(1, weight=0)
-        pagination_frame.grid_columnconfigure(2, weight=1)
-
-        prev_btn = ctk.CTkButton(
-            pagination_frame,
-            text="⬅ 이전",
-            width=80,
-            command=lambda bid=banner_id: self.change_page(bid, -1)
-        )
-        prev_btn.grid(row=0, column=0, sticky="e", padx=(0, 10))
-
-        page_label = ctk.CTkLabel(
-            pagination_frame,
-            text="1 / 1",
-            width=80
-        )
-        page_label.grid(row=0, column=1, sticky="nsew")
-
-        next_btn = ctk.CTkButton(
-            pagination_frame,
-            text="다음 ➡",
-            width=80,
-            command=lambda bid=banner_id: self.change_page(bid, 1)
-        )
-        next_btn.grid(row=0, column=2, sticky="w", padx=(10, 0))
-
-        # 탭 정보 저장
         self.banner_tabs[banner_id] = {
             "tab": tab,
             "stats_text": stats_text,
@@ -254,6 +251,15 @@ class ModernGachaViewer:
             "page_label": page_label
         }
         self.banner_pagination[banner_id] = {"page": 1, "total_pages": 1}
+
+    def change_page_current_tab(self, delta):
+        """현재 선택된 탭의 페이지를 변경"""
+        current_tab = self.tabview.get()
+        # 탭 이름에서 banner_id 찾기
+        for banner_id, tabinfo in self.banner_tabs.items():
+            if self.tabview.tab(banner_id) == current_tab:
+                self.change_page(banner_id, delta)
+                break
 
     def change_page(self, banner_id, delta):
         pag = self.banner_pagination[banner_id]
@@ -614,10 +620,20 @@ class ModernGachaViewer:
             if stats.get("5star_intervals"):
                 avg_interval = sum(stats["5star_intervals"]) / len(stats["5star_intervals"])
 
-            # 시각적 이모지 개선
-            fire_icons = "🟨" * min(int(five_star), 10) if five_star else "⬜"
-            purple_icons = "🟪" * min(int(four_star) // 10, 10) if four_star else "⬜"
-            white_icons = "⬜" * min(int(three_star) // 100, 10) if three_star else "⬜"
+            # 별 색상: 5성(노랑), 4성(보라), 3성(회색)
+            def color_star(star, color):
+                # CTkTextbox는 색상 지원 안함, 유니코드 이모지로 대체
+                if color == "yellow":
+                    return "⭐"
+                elif color == "purple":
+                    return "🟣"
+                elif color == "gray":
+                    return "⚪"
+                return star
+
+            fire_icons = color_star("★", "yellow") * min(int(five_star), 10) if five_star else "⚪"
+            purple_icons = color_star("★", "purple") * min(int(four_star) // 10, 10) if four_star else "⚪"
+            white_icons = color_star("★", "gray") * min(int(three_star) // 100, 10) if three_star else "⚪"
             pity_count = stats.get('pity_count', 0)
             green_bars = "🟩" * max(0, (90 - int(pity_count)) // 10)
             yellow_bars = "🟨" * min(int(pity_count) // 10, 9)
@@ -702,6 +718,14 @@ class ModernGachaViewer:
                     item_name = getattr(item, 'name', 'Unknown')
                     item_time = getattr(item, 'time', '')
 
+                    # 시간 포맷팅
+                    try:
+                        from datetime import datetime
+                        time_obj = datetime.strptime(item_time, "%Y-%m-%d %H:%M:%S")
+                        time_display = time_obj.strftime("%m/%d %H:%M")
+                    except:
+                        time_display = str(item_time)[:16] if item_time else "알 수 없음"
+
                     if str(item_rank) == "5":
                         rank_display = "⭐⭐⭐⭐⭐"
                         prefix = "🌟"
@@ -736,16 +760,8 @@ class ModernGachaViewer:
                         except (ValueError, IndexError):
                             interval_info = ""
 
-                    # 시간 포맷팅
-                    try:
-                        from datetime import datetime
-                        time_obj = datetime.strptime(item_time, "%Y-%m-%d %H:%M:%S")
-                        time_display = time_obj.strftime("%m/%d %H:%M")
-                    except:
-                        time_display = str(item_time)[:16] if item_time else "알 수 없음"
-
-                    records_text += f"{i+1:2d}. {prefix} {rank_display} {name_style}{interval_info}\n"
-                    records_text += f"     📅 {time_display}\n"
+                    # 한 줄에 시간, 이름, 등급, 운 정보 등 표시
+                    records_text += f"{i+1:2d}. {prefix} {rank_display} {name_style}  ⏰ {time_display}{interval_info}\n"
 
                     if str(item_rank) == "5":
                         records_text += "╚" + "═" * 30 + "╝\n"
@@ -768,7 +784,7 @@ class ModernGachaViewer:
         tab_info["records_text"].insert("0.0", records_text)
         tab_info["records_text"].configure(state="disabled")
 
-        # 페이지네이션 컨트롤 업데이트
+        # 페이지네이션 컨트롤 업데이트 (각 탭별)
         tab_info["page_label"].configure(text=f"{current_page} / {total_pages}")
         tab_info["prev_btn"].configure(state="normal" if current_page > 1 else "disabled")
         tab_info["next_btn"].configure(state="normal" if current_page < total_pages else "disabled")
