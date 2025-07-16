@@ -16,17 +16,6 @@ Honkai: Star Rail의 가챠 기록을 게임에 접속하지 않고도 조회할
 1. [Releases]([https://github.com/your-repo/releases](https://github.com/seunghoon4176/starrail-gacha-tracker/releases))에서 `StarRail_Gacha_Viewer.exe` 다운로드
 2. 실행 파일을 더블클릭하여 실행
 
-### Python으로 직접 실행
-```bash
-# 필요한 패키지 설치
-pip install honkaistarrail tkinter pyinstaller
-
-# 프로그램 실행
-python gacha_viewer.py
-```
-
-## 📖 사용 방법
-
 ### 1. 가챠 기록 링크 획득
 1. Honkai: Star Rail 게임 실행
 2. 게임 내에서 워프(가챠) 기록 화면 열기
