@@ -47,7 +47,7 @@ def resource_path(relative_path):
 class ModernGachaViewer:
     def __init__(self):
         self.root = ctk.CTk()
-        self.root.title("로컬 워프 트래커 V1.0.0")
+        self.root.title("로컬 워프 트래커 V1.0.1")
         self.root.geometry("700x950")  # ← 창 크기(고정)
         self.root.resizable(False, False)  # ← 리사이즈 가능 여부
         
@@ -175,7 +175,7 @@ class ModernGachaViewer:
         notice_text.configure(state="disabled")
 
     def create_menu_bar(self):
-        """상단 메뉴바 생성 (기존 워프 트래커 불러오기/업데이트 공지)"""
+        """상단 메뉴바 생성 (기존 워프 트래커 불러오기/업데이트 공지/개발자 도와주기)"""
         menubar = ctk.CTkFrame(self.root, height=28)
         menubar.pack(fill="x", padx=0, pady=(0, 2))
         # 기존 워프 트래커 불러오기 버튼
@@ -197,7 +197,17 @@ class ModernGachaViewer:
             font=ctk.CTkFont(size=13),
             command=self.show_update_notice
         )
-        notice_btn.pack(side="left", padx=(4, 8), pady=2)
+        notice_btn.pack(side="left", padx=(4, 4), pady=2)
+        # 개발자 도와주기 버튼 추가
+        support_btn = ctk.CTkButton(
+            menubar,
+            text="개발자에게 문의하기(오픈채팅)",
+            width=150,
+            height=24,
+            font=ctk.CTkFont(size=13),
+            command=lambda: webbrowser.open("https://open.kakao.com/o/sE05H3Vf")
+        )
+        support_btn.pack(side="left", padx=(4, 8), pady=2)
 
     def show_update_notice(self):
         """깃허브 릴리즈에서 공지(릴리즈 노트) 불러와서 표시"""
@@ -220,7 +230,7 @@ class ModernGachaViewer:
                 if latest_ver and latest_ver != CURRENT_VERSION:
                     msg = f"새 버전: {latest_ver}\n\n{body}"
                 else:
-                    msg = f"현재 버전은({CURRENT_VERSION})입니다.\n\n{body or '공지 없음'}"
+                    msg = f"현재 프로그램 버전은({CURRENT_VERSION})입니다.\n\n{body or '공지 없음'}"
             else:
                 msg = "공지 불러오기 실패"
         except Exception as e:
@@ -593,6 +603,15 @@ class ModernGachaViewer:
         center_frame = ctk.CTkFrame(pagination_frame, fg_color="transparent")
         center_frame.pack(anchor="center", expand=True)
 
+        # 맨앞으로 버튼 추가
+        first_btn = ctk.CTkButton(
+            center_frame,
+            text="⏮ 맨앞",
+            width=70,
+            command=lambda bid=banner_id: self.goto_page(bid, 1)
+        )
+        first_btn.pack(side="left", padx=(0, 5))
+
         prev_btn = ctk.CTkButton(
             center_frame,
             text="⬅ 이전",
@@ -615,6 +634,15 @@ class ModernGachaViewer:
             command=lambda bid=banner_id: self.change_page(bid, 1)
         )
         next_btn.pack(side="left", padx=(10, 0))
+
+        # 맨뒤로 버튼 추가
+        last_btn = ctk.CTkButton(
+            center_frame,
+            text="맨뒤 ⏭",
+            width=70,
+            command=lambda bid=banner_id: self.goto_last_page(bid)
+        )
+        last_btn.pack(side="left", padx=(5, 0))
 
         # 기록 프레임 (중간)
         records_frame = ctk.CTkFrame(tab)
@@ -645,9 +673,21 @@ class ModernGachaViewer:
             "records_text": records_text,
             "prev_btn": prev_btn,
             "next_btn": next_btn,
-            "page_label": page_label
+            "page_label": page_label,
+            "first_btn": first_btn,
+            "last_btn": last_btn
         }
         self.banner_pagination[banner_id] = {"page": 1, "total_pages": 1}
+
+    def goto_page(self, banner_id, page):
+        pag = self.banner_pagination[banner_id]
+        if 1 <= page <= pag["total_pages"]:
+            pag["page"] = page
+            self._update_banner_display(banner_id)
+
+    def goto_last_page(self, banner_id):
+        pag = self.banner_pagination[banner_id]
+        self.goto_page(banner_id, pag["total_pages"])
 
     def change_page_current_tab(self, delta):
         """현재 선택된 탭의 페이지를 변경"""
@@ -1192,6 +1232,8 @@ class ModernGachaViewer:
         tab_info["page_label"].configure(text=f"{current_page} / {total_pages}")
         tab_info["prev_btn"].configure(state="normal" if current_page > 1 else "disabled")
         tab_info["next_btn"].configure(state="normal" if current_page < total_pages else "disabled")
+        tab_info["first_btn"].configure(state="normal" if current_page > 1 else "disabled")
+        tab_info["last_btn"].configure(state="normal" if current_page < total_pages else "disabled")
 
     def open_settings(self):
         """설정 창 열기"""
