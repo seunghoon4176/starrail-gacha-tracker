@@ -556,7 +556,7 @@ class ModernGachaViewer:
         )
         stats_label.pack(anchor="w", padx=15, pady=(10, 2))
 
-        stats_text = ctk.CTkTextbox(stats_frame, height=110)
+        stats_text = ctk.CTkTextbox(stats_frame, height=180)  # 통계 영역을 크게 (예: 180)
         stats_text.pack(fill="x", padx=15, pady=(0, 8))
         stats_text.configure(state="disabled")
 
@@ -602,7 +602,7 @@ class ModernGachaViewer:
 
         records_text = ctk.CTkTextbox(
             records_frame,
-            height=540,
+            height=160,  # 가챠 기록 영역을 더 작게 (예: 160)
             font=ctk.CTkFont(size=14)
         )
         records_text.pack(fill="both", expand=True, padx=15, pady=(0, 5))
@@ -1049,7 +1049,7 @@ class ModernGachaViewer:
         tab_info["stats_text"].configure(state="disabled")
 
         # 페이지네이션 계산
-        items_per_page = 15
+        items_per_page = 10  # 기존 15 → 10개로 변경
         total_items = len(data)
         total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
         pag = self.banner_pagination[banner_id]
