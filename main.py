@@ -426,16 +426,21 @@ class ModernGachaViewer:
         cache = self._item_name_cache
 
         # json 파일 전체 캐시 (프로세스 내 1회만)
+        # 파일 대신 원격 API에서 불러옴
         if not hasattr(self, "_character_json_cache"):
             try:
-                with open("hakushin_data/character.json", encoding="utf-8") as f:
-                    self._character_json_cache = json.load(f)
+                url = "https://api.hakush.in/hsr/data/character.json"
+                resp = requests.get(url, timeout=10)
+                resp.raise_for_status()
+                self._character_json_cache = resp.json()
             except Exception:
                 self._character_json_cache = {}
         if not hasattr(self, "_lightcone_json_cache"):
             try:
-                with open("hakushin_data/lightcone.json", encoding="utf-8") as f:
-                    self._lightcone_json_cache = json.load(f)
+                url = "https://api.hakush.in/hsr/data/lightcone.json"
+                resp = requests.get(url, timeout=10)
+                resp.raise_for_status()
+                self._lightcone_json_cache = resp.json()
             except Exception:
                 self._lightcone_json_cache = {}
 
