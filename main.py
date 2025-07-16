@@ -400,111 +400,70 @@ class ModernGachaViewer:
         item_id로 이름을 반환 (언어별)
         hakushin_data/character.json, lightcone.json을 모두 참조
         """
-        # 캐시
+        # 캐시: (item_id, lang) -> name
         if not hasattr(self, "_item_name_cache"):
             self._item_name_cache = {}
         cache = self._item_name_cache
-        # lang이 "kr"이면 "ko"로 변환 (character.json은 "ko" 사용)
-        if lang == "kr":
-            lang = "ko"
+
+        # json 파일 전체 캐시 (프로세스 내 1회만)
+        if not hasattr(self, "_character_json_cache"):
+            try:
+                with open("hakushin_data/character.json", encoding="utf-8") as f:
+                    self._character_json_cache = json.load(f)
+            except Exception:
+                self._character_json_cache = {}
+        if not hasattr(self, "_lightcone_json_cache"):
+            try:
+                with open("hakushin_data/lightcone.json", encoding="utf-8") as f:
+                    self._lightcone_json_cache = json.load(f)
+            except Exception:
+                self._lightcone_json_cache = {}
+
         key = (item_id, lang)
         if key in cache:
             return cache[key]
-        name = None
-        # 캐릭터
-        try:
-            with open("hakushin_data/character.json", encoding="utf-8") as f:
-                chars = json.load(f)
-            # dict 형태(1001: {...})면 values()로 변환
-            if isinstance(chars, dict):
-                chars_dict = chars
-                # starrailstation/hakushin 형식: {"characters": [...]}
-                chars = chars.get("characters") or chars.get("data")
-                if chars is None:
-                    chars = list(chars_dict.values())
+
+        name = ""
+        # 디버깅: 어떤 id/lang이 들어오는지 출력
+        #print(f"[DEBUG] _get_item_name_by_id: item_id={item_id!r}, lang={lang!r}")
+
+        # 1. 캐릭터에서 id로 바로 찾기
+        chars = self._character_json_cache
+        if isinstance(chars, dict) and str(item_id) in chars:
+            c = chars[str(item_id)]
+            #print(f"[DEBUG] 캐릭터에서 찾음: {item_id}")
+            if lang == "kr":
+                name = c.get("kr") or c.get("name_kr") or c.get("ko") or c.get("name") or c.get("en")
+            elif lang == "en":
+                name = c.get("en") or c.get("name_en") or c.get("name") or c.get("kr")
+            elif lang == "jp":
+                name = c.get("jp") or c.get("name_jp") or c.get("name") or c.get("en")
+            elif lang == "cn":
+                name = c.get("cn") or c.get("name_cn") or c.get("name") or c.get("en")
             else:
-                chars_dict = None
-            if not isinstance(chars, list):
-                chars = list(chars)
-            for c in chars:
-                if not isinstance(c, dict):
-                    continue
-                # id 매칭 (key가 숫자 문자열일 때도 대응)
-                cid = (
-                    str(c.get("id"))
-                    or str(c.get("characterId"))
-                    or str(c.get("avatarId"))
-                    or str(c.get("avatar_id"))
-                    or ""
-                )
-                # 순수 dict(1001: {...}) 구조 대응: dict의 key와 item_id가 일치하면
-                if not cid and chars_dict:
-                    for k, v in chars_dict.items():
-                        if v is c and str(k) == str(item_id):
-                            cid = str(item_id)
-                            break
-                if cid == item_id:
-                    # 언어별 이름 추출 (starrailstation/hakushin json, id-key json 모두 대응)
-                    if lang == "ko":
-                        name = c.get("name_ko") or c.get("kr") or c.get("ko") or c.get("name") or c.get("en")
-                    elif lang == "en":
-                        name = c.get("name_en") or c.get("en") or c.get("name") or c.get("kr")
-                    elif lang == "jp":
-                        name = c.get("name_jp") or c.get("jp") or c.get("name") or c.get("en")
-                    elif lang == "cn":
-                        name = c.get("name_cn") or c.get("cn") or c.get("name") or c.get("en")
-                    else:
-                        name = c.get("name") or c.get("kr") or c.get("en")
-                    if not name:
-                        name = c.get(lang)
-                    break
-        except Exception:
-            pass
-        # 광추
+                name = c.get("name") or c.get("kr") or c.get("en")
+            if not name:
+                name = c.get(lang)
+        # 2. 광추에서 id로 바로 찾기
         if not name:
-            try:
-                with open("hakushin_data/lightcone.json", encoding="utf-8") as f:
-                    cones = json.load(f)
-                if isinstance(cones, dict):
-                    cones_dict = cones
-                    cones = cones.get("lightcones") or cones.get("data")
-                    if cones is None:
-                        cones = list(cones_dict.values())
+            cones = self._lightcone_json_cache
+            if isinstance(cones, dict) and str(item_id) in cones:
+                c = cones[str(item_id)]
+                #print(f"[DEBUG] 광추에서 찾음: {item_id}")
+                if lang == "kr":
+                    name = c.get("kr") or c.get("name_kr") or c.get("ko") or c.get("name") or c.get("en")
+                elif lang == "en":
+                    name = c.get("en") or c.get("name_en") or c.get("name") or c.get("kr")
+                elif lang == "jp":
+                    name = c.get("jp") or c.get("name_jp") or c.get("name") or c.get("en")
+                elif lang == "cn":
+                    name = c.get("cn") or c.get("name_cn") or c.get("name") or c.get("en")
                 else:
-                    cones_dict = None
-                if not isinstance(cones, list):
-                    cones = list(cones)
-                for c in cones:
-                    if not isinstance(c, dict):
-                        continue
-                    cid = (
-                        str(c.get("id"))
-                        or str(c.get("lightconeId"))
-                        or str(c.get("lightcone_id"))
-                        or ""
-                    )
-                    if not cid and cones_dict:
-                        for k, v in cones_dict.items():
-                            if v is c and str(k) == str(item_id):
-                                cid = str(item_id)
-                                break
-                    if cid == item_id:
-                        if lang == "ko":
-                            name = c.get("name_ko") or c.get("kr") or c.get("ko") or c.get("name") or c.get("en")
-                        elif lang == "en":
-                            name = c.get("name_en") or c.get("en") or c.get("name") or c.get("kr")
-                        elif lang == "jp":
-                            name = c.get("name_jp") or c.get("jp") or c.get("name") or c.get("en")
-                        elif lang == "cn":
-                            name = c.get("name_cn") or c.get("cn") or c.get("name") or c.get("en")
-                        else:
-                            name = c.get("name") or c.get("kr") or c.get("en")
-                        if not name:
-                            name = c.get(lang)
-                        break
-            except Exception:
-                pass
+                    name = c.get("name") or c.get("kr") or c.get("en")
+                if not name:
+                    name = c.get(lang)
         if not name:
+            #print(f"[DEBUG] 이름 매칭 실패: item_id={item_id!r}, lang={lang!r}")
             name = ""  # fallback을 빈 문자열로
         cache[key] = name
         return name
@@ -890,25 +849,18 @@ class ModernGachaViewer:
     async def _fetch_banner_data(self, gacha_link: str, banner_id: str, api_lang: str) -> List[Any]:
         """개별 배너 데이터 조회 - 콜라보 배너 포함 전체 배너 매핑"""
         api = GachaAPI(gacha_link)
-        
-        # 콜라보 배너 포함 전체 배너 타입 매핑
         banner_type_map = {
-            "11": "11", # CHARACTER = '11' - 한정 캐릭터 배너 (실제 데이터 확인됨)
-            "12": "12", # LIGHT_CONE = '12' - 한정 광추 배너 
-            "21": "21", # 콜라보 캐릭터 배너 (Rust 코드에서 확인됨)
-            "22": "22", # 콜라보 광추 배너 (Rust 코드에서 확인됨)
-            "1": "1",   # STELLAR = '1' - 상시 배너 (실제 데이터 확인됨)
-            "2": "2"    # DEPARTURE = '2' - 초보자 배너
+            "11": "11",
+            "12": "12",
+            "21": "21",
+            "22": "22",
+            "1": "1",
+            "2": "2"
         }
-        
         gacha_type = banner_type_map.get(banner_id, banner_id)
         print(f"🔍 배너 {banner_id} ({self.banner_data[banner_id]['name']}) -> gacha_type {gacha_type} 조회 시작")
-        
-        # 모든 배너에 대해 강제로 조회 시도
         records = await api.fetch_gacha_records(gacha_type, api_lang)
         print(f"📊 배너 {banner_id}: {len(records)}개 기록 조회됨")
-        
-        # API 응답 상세 정보 출력
         if records:
             actual_gacha_type = records[0].get("gacha_type", "unknown")
             first_item_name = records[0].get("name", "unknown")
@@ -925,7 +877,13 @@ class ModernGachaViewer:
         converted_records = []
         for record in records:
             item_obj = type('GachaItem', (), {})()
-            item_obj.id = record.get("id", "")
+            # 아이템 id 필드 우선순위: item_id > itemId > id
+            item_obj.id = (
+                record.get("item_id")
+                or record.get("itemId")
+                or record.get("id")
+                or ""
+            )
             item_obj.name = record.get("name", "")
             item_obj.rank = int(record.get("rank_type", "3"))
             item_obj.time = record.get("time", "")
