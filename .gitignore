@@ -180,6 +180,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-*.json
+settings.json
 
 venv_build/
+*.csv

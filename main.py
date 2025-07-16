@@ -48,7 +48,7 @@ class ModernGachaViewer:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("로컬 워프 트래커 V1.0.0")
-        self.root.geometry("700x950")  # ← 창 크기(고정)
+        self.root.geometry("700x1000")  # ← 창 크기(고정)
         self.root.resizable(False, False)  # ← 리사이즈 가능 여부
         
         # 윈도우 아이콘 설정
@@ -87,7 +87,9 @@ class ModernGachaViewer:
         # 기본 설정 변수들 (구문 오류 수정)
         self.link_method = ctk.StringVar(value="auto")  # 자동으로 기본 설정
         self.theme_var = ctk.StringVar(value="dark")  # 테마 변수 추가
+        self.lang_var = ctk.StringVar(value="kr")     # 언어 변수 추가 (기본 kr)
         self.current_theme = "dark"  # 현재 테마 추적
+        self.current_lang = "kr"     # 현재 언어 추적
         
         # 데이터 파일 초기화
         self.data_file = "gacha_records.json"
@@ -309,103 +311,9 @@ class ModernGachaViewer:
         starrailstation 등 외부 서비스 백업(csv/xlsx) → 내부 데이터 변환
         컬럼 예시: uid,id,rarity,time,banner,type,manual
         """
-        # 아이템 id→이름 매핑 (CSV/공식 API 기준)
-        item_id_name_map = {
-            "1001": "Mar. 7th",
-            "1002": "단항",
-            "1003": "히메코",
-            "1004": "웰트",
-            "1008": "아를란",
-            "1009": "아스타",
-            "1013": "헤르타",
-            "1101": "브로냐",
-            "1102": "제레",
-            "1103": "서벌",
-            "1105": "나타샤",
-            "1106": "페라",
-            "1108": "삼포",
-            "1109": "후크",
-            "1110": "링스",
-            "1111": "루카",
-            "1201": "청작",
-            "1202": "정운",
-            "1206": "소상",
-            "1207": "어공",
-            "1209": "연경",
-            "1210": "계네빈",
-            "1211": "백로",
-            "1214": "설의",
-            "1223": "맥택",
-            "1301": "갤러거",
-            "1312": "미샤",
-            "1313": "선데이",
-            "1403": "트리비",
-            "1404": "마이데이",
-            "1405": "아낙사",
-            "1407": "카스토리스",
-            "1408": "파이논",
-            "1409": "히아킨",
-            "20000": "화살촉",
-            "20001": "풍작",
-            "20002": "천경",
-            "20003": "앰버",
-            "20004": "그윽",
-            "20005": "합창",
-            "20006": "아카이브",
-            "20007": "시위를 떠난 화살",
-            "20008": "알찬 열매",
-            "20009": "무너진 행복",
-            "20010": "수비",
-            "20011": "심연의 고리",
-            "20012": "맞물린 톱니",
-            "20013": "영험한 열쇠",
-            "20014": "대립",
-            "20015": "증식",
-            "20016": "전멸",
-            "20017": "강토 개척",
-            "20018": "숨은 그림자",
-            "20019": "어울림",
-            "20020": "식견",
-            "20021": "불타는 그림자",
-            "20022": "추억 회상",
-            "21000": "수술 후의 대화",
-            "21001": "밤 인사와 잠든 얼굴",
-            "21002": "여생의 첫날",
-            "21003": "침묵만이",
-            "21004": "기억 속 모습",
-            "21005": "두더지파가 환영해",
-            "21006": "나의 탄생",
-            "21007": "같은 심정",
-            "21008": "사냥감의 시선",
-            "21009": "랜도의 선택",
-            "21010": "논검",
-            "21011": "행성과의 만남",
-            "21012": "비밀 맹세",
-            "21013": "세상을 진정시키지 마",
-            "21014": "알맞은 타이밍",
-            "21015": "땀방울처럼 빛나는 결심",
-            "21016": "우주 시장 동향",
-            "21017": "팔로우를 부탁해!",
-            "21018": "댄스! 댄스! 댄스!",
-            "21019": "푸른 하늘 아래",
-            "21020": "천재들의 휴식",
-            "21042": "마음에 새긴 약속",
-            "21044": "끝없는 춤",
-            "21045": "조화가 침묵한 후",
-            "21046": "피어나길 기다리는 꽃",
-            "21047": "그림자처럼 뒤따르는 밤",
-            "21048": "꿈의 몽타주",
-            "21051": "천재들의 안부 인사",
-            "21054": "이야기의 다음 페이지",
-            "23002": "대체할 수 없는 것",
-            "23003": "아직 전투는 끝나지 않았다",
-            "23004": "세계의 이름으로",
-            "23038": "시간이 한 송이 꽃이라면",
-            "23042": "무지개가 영원히 하늘에 머물길",
-            "23044": "이와 같이 타오르는 여명",
-            "23034": "대지로 돌아온 비행",
-            "23040": "이별이 더 아름답도록",
-        }
+        # id→이름 매핑은 저장하지 않고, 데이터에는 id만 저장
+        # 이름은 UI 표시 시에만 언어 설정에 따라 변환해서 보여줌
+
         # 기존 데이터 초기화 (중복 방지)
         for banner_id in self.banner_data:
             self.banner_data[banner_id]["data"] = []
@@ -447,10 +355,7 @@ class ModernGachaViewer:
             type_ = str(getval(row, "type"))
             rarity = int(getval(row, "rarity") or 3)
             id_val = str(getval(row, "id"))
-            name = str(getval(row, "name") or "")
-            # name이 없으면 id로 이름 매핑 시도
-            if not name or name == id_val:
-                name = item_id_name_map.get(id_val, id_val)
+            name = str(getval(row, "name") or "")  # name은 저장하지 않음
             time = str(getval(row, "time") or getval(row, "datetime"))
             # 배너ID 결정 (더 간결하게)
             banner_id = banner_map.get((banner, type_))
@@ -459,7 +364,6 @@ class ModernGachaViewer:
             # 객체 생성
             item_obj = type('GachaItem', (), {})()
             item_obj.id = id_val
-            item_obj.name = name
             item_obj.rank = rarity
             # ISO8601 → "YYYY-MM-DD HH:MM:SS"
             try:
@@ -471,14 +375,13 @@ class ModernGachaViewer:
             item_obj.gacha_type = type_
             item_obj.uid = str(getval(row, "uid"))
             # 배너에 추가
-            # 중복 방지: 같은 time, id, rank, name이 이미 있으면 추가하지 않음
+            # 중복 방지: 같은 time, id, rank가 이미 있으면 추가하지 않음
             exists = False
             for exist in self.banner_data[banner_id]["data"]:
                 if (
                     getattr(exist, "time", None) == item_obj.time and
                     getattr(exist, "id", None) == item_obj.id and
-                    getattr(exist, "rank", None) == item_obj.rank and
-                    getattr(exist, "name", None) == item_obj.name
+                    getattr(exist, "rank", None) == item_obj.rank
                 ):
                     exists = True
                     break
@@ -491,6 +394,120 @@ class ModernGachaViewer:
                 key=lambda x: (getattr(x, "time", ""), getattr(x, "id", "")),
                 reverse=True
             )
+
+    def _get_item_name_by_id(self, item_id, lang="kr"):
+        """
+        item_id로 이름을 반환 (언어별)
+        hakushin_data/character.json, lightcone.json을 모두 참조
+        """
+        # 캐시
+        if not hasattr(self, "_item_name_cache"):
+            self._item_name_cache = {}
+        cache = self._item_name_cache
+        # lang이 "kr"이면 "ko"로 변환 (character.json은 "ko" 사용)
+        if lang == "kr":
+            lang = "ko"
+        key = (item_id, lang)
+        if key in cache:
+            return cache[key]
+        name = None
+        # 캐릭터
+        try:
+            with open("hakushin_data/character.json", encoding="utf-8") as f:
+                chars = json.load(f)
+            # dict 형태(1001: {...})면 values()로 변환
+            if isinstance(chars, dict):
+                chars_dict = chars
+                # starrailstation/hakushin 형식: {"characters": [...]}
+                chars = chars.get("characters") or chars.get("data")
+                if chars is None:
+                    chars = list(chars_dict.values())
+            else:
+                chars_dict = None
+            if not isinstance(chars, list):
+                chars = list(chars)
+            for c in chars:
+                if not isinstance(c, dict):
+                    continue
+                # id 매칭 (key가 숫자 문자열일 때도 대응)
+                cid = (
+                    str(c.get("id"))
+                    or str(c.get("characterId"))
+                    or str(c.get("avatarId"))
+                    or str(c.get("avatar_id"))
+                    or ""
+                )
+                # 순수 dict(1001: {...}) 구조 대응: dict의 key와 item_id가 일치하면
+                if not cid and chars_dict:
+                    for k, v in chars_dict.items():
+                        if v is c and str(k) == str(item_id):
+                            cid = str(item_id)
+                            break
+                if cid == item_id:
+                    # 언어별 이름 추출 (starrailstation/hakushin json, id-key json 모두 대응)
+                    if lang == "ko":
+                        name = c.get("name_ko") or c.get("kr") or c.get("ko") or c.get("name") or c.get("en")
+                    elif lang == "en":
+                        name = c.get("name_en") or c.get("en") or c.get("name") or c.get("kr")
+                    elif lang == "jp":
+                        name = c.get("name_jp") or c.get("jp") or c.get("name") or c.get("en")
+                    elif lang == "cn":
+                        name = c.get("name_cn") or c.get("cn") or c.get("name") or c.get("en")
+                    else:
+                        name = c.get("name") or c.get("kr") or c.get("en")
+                    if not name:
+                        name = c.get(lang)
+                    break
+        except Exception:
+            pass
+        # 광추
+        if not name:
+            try:
+                with open("hakushin_data/lightcone.json", encoding="utf-8") as f:
+                    cones = json.load(f)
+                if isinstance(cones, dict):
+                    cones_dict = cones
+                    cones = cones.get("lightcones") or cones.get("data")
+                    if cones is None:
+                        cones = list(cones_dict.values())
+                else:
+                    cones_dict = None
+                if not isinstance(cones, list):
+                    cones = list(cones)
+                for c in cones:
+                    if not isinstance(c, dict):
+                        continue
+                    cid = (
+                        str(c.get("id"))
+                        or str(c.get("lightconeId"))
+                        or str(c.get("lightcone_id"))
+                        or ""
+                    )
+                    if not cid and cones_dict:
+                        for k, v in cones_dict.items():
+                            if v is c and str(k) == str(item_id):
+                                cid = str(item_id)
+                                break
+                    if cid == item_id:
+                        if lang == "ko":
+                            name = c.get("name_ko") or c.get("kr") or c.get("ko") or c.get("name") or c.get("en")
+                        elif lang == "en":
+                            name = c.get("name_en") or c.get("en") or c.get("name") or c.get("kr")
+                        elif lang == "jp":
+                            name = c.get("name_jp") or c.get("jp") or c.get("name") or c.get("en")
+                        elif lang == "cn":
+                            name = c.get("name_cn") or c.get("cn") or c.get("name") or c.get("en")
+                        else:
+                            name = c.get("name") or c.get("kr") or c.get("en")
+                        if not name:
+                            name = c.get(lang)
+                        break
+            except Exception:
+                pass
+        if not name:
+            name = ""  # fallback을 빈 문자열로
+        cache[key] = name
+        return name
 
     def setup_ui(self):
         # 메인 컨테이너 (여백 조정)
@@ -1105,7 +1122,10 @@ class ModernGachaViewer:
 
                 try:
                     item_rank = getattr(item, 'rank', 3)
-                    item_name = getattr(item, 'name', 'Unknown')
+                    item_id = getattr(item, 'id', '')
+                    # 이름은 언어 설정에 따라 동적으로 변환 (hakushin_data 활용)
+                    lang_code = getattr(self, "current_lang", "kr")
+                    item_name = self._get_item_name_by_id(item_id, lang=lang_code)
                     item_time = getattr(item, 'time', '')
 
                     # 시간 포맷팅
@@ -1116,20 +1136,26 @@ class ModernGachaViewer:
                     except:
                         time_display = str(item_time)[:16] if item_time else "알 수 없음"
 
+                    # 이름이 id와 같거나 매핑 실패시 id만 보이지 않게, 매핑 성공시만 이름 표시
+                    if item_name and item_name != item_id and item_name.strip() != "":
+                        item_name_display = item_name
+                    else:
+                        item_name_display = "알 수 없음"
+
                     if str(item_rank) == "5":
                         rank_display = "⭐⭐⭐⭐⭐"
                         prefix = "🌟"
-                        name_style = f"【{item_name}】"
+                        name_style = f"【{item_name_display}】"
                         border = "╔" + "═" * 30 + "╗"
                         records_text += f"{border}\n"
                     elif str(item_rank) == "4":
                         rank_display = "⭐⭐⭐⭐"
                         prefix = "💜"
-                        name_style = f"『{item_name}』"
+                        name_style = f"『{item_name_display}』"
                     else:
                         rank_display = "⭐⭐⭐"
                         prefix = "🔹"
-                        name_style = item_name
+                        name_style = item_name_display  # 3성은 그냥 이름
 
                     # interval_info 계산
                     interval_info = ""
@@ -1150,7 +1176,7 @@ class ModernGachaViewer:
                         except (ValueError, IndexError):
                             interval_info = ""
 
-                    # 한 줄에 시간, 이름, 등급, 운 정보 등 표시
+                    # 한 줄에 시간, 이름, 등급, 운 정보 등 표시 (uid는 표시하지 않음)
                     records_text += f"{i+1:2d}. {prefix} {rank_display} {name_style}  ⏰ {time_display}{interval_info}\n"
 
                     if str(item_rank) == "5":
@@ -1160,7 +1186,6 @@ class ModernGachaViewer:
                 except Exception as e:
                     print(f"기록 표시 중 오류 (항목 {i}): {e}")
                     continue
-
         else:
             records_text = (
                 "❌ 가챠 기록이 없습니다.\n"
@@ -1247,34 +1272,25 @@ class ModernGachaViewer:
         else:
             self.settings_theme_switch.deselect()
 
-        # 가챠 링크 획득 안내만 표시 (파워쉘 관련 버튼/설명 제거)
-        method_frame = ctk.CTkFrame(scrollable_frame)
-        method_frame.pack(fill="x", padx=10, pady=10)
+        # 언어 설정 추가
+        lang_frame = ctk.CTkFrame(scrollable_frame)
+        lang_frame.pack(fill="x", padx=10, pady=10)
 
-        method_label = ctk.CTkLabel(method_frame, text="가챠 링크 획득 방법:", font=ctk.CTkFont(size=16, weight="bold"))
-        method_label.pack(anchor="w", padx=15, pady=(15, 5))
+        lang_label = ctk.CTkLabel(lang_frame, text="이름 표시 언어:", font=ctk.CTkFont(size=16, weight="bold"))
+        lang_label.pack(anchor="w", padx=15, pady=(15, 5))
 
-        method_info_frame = ctk.CTkFrame(method_frame)
-        method_info_frame.pack(fill="x", padx=15, pady=(0, 15))
+        lang_switch_frame = ctk.CTkFrame(lang_frame)
+        lang_switch_frame.pack(fill="x", padx=15, pady=(0, 15))
 
-        info_label = ctk.CTkLabel(
-            method_info_frame,
-            text="🔍 다음 순서로 자동 검색합니다:\n1. Windows 레지스트리\n2. 게임 로그 파일\n3. 게임 웹 캐시",
-            font=ctk.CTkFont(size=12),
-            justify="left"
+        lang_options = [("한국어", "kr"), ("영어", "en")]
+        lang_dropdown = ctk.CTkOptionMenu(
+            lang_switch_frame,
+            variable=self.lang_var,
+            values=[v for _, v in lang_options],
+            command=lambda _: None
         )
-        info_label.pack(anchor="w", padx=15, pady=10)
-
-        help_btn = ctk.CTkButton(
-            method_info_frame,
-            text="❓ 도움말",
-            command=self.show_help,
-            width=100,
-            height=35,
-            fg_color="gray50",
-            hover_color="gray40"
-        )
-        help_btn.pack(anchor="w", padx=15, pady=(0, 10))
+        lang_dropdown.set(self.lang_var.get())
+        lang_dropdown.pack(anchor="w", padx=15, pady=10)
 
         # 확인/취소 버튼
         button_frame = ctk.CTkFrame(self.settings_window)
@@ -1316,7 +1332,15 @@ class ModernGachaViewer:
             if new_theme != self.current_theme:
                 ctk.set_appearance_mode(new_theme)
                 self.current_theme = new_theme
-                self.save_settings()
+            # 언어 변경
+            new_lang = self.lang_var.get()
+            if new_lang != getattr(self, "current_lang", "kr"):
+                self.current_lang = new_lang
+                # 모든 배너/요약 갱신
+                for banner_id in self.banner_data:
+                    self._update_banner_display(banner_id)
+                self._update_summary_display()
+            self.save_settings()
             self.close_settings()
         except Exception as e:
             print(f"설정 적용 중 오류: {e}")
@@ -1325,7 +1349,8 @@ class ModernGachaViewer:
         """설정을 파일에 저장"""
         try:
             settings = {
-                "theme": self.current_theme
+                "theme": self.current_theme,
+                "lang": self.lang_var.get()
             }
             with open("settings.json", "w", encoding="utf-8") as f:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
@@ -1339,74 +1364,86 @@ class ModernGachaViewer:
                 with open("settings.json", "r", encoding="utf-8") as f:
                     settings = json.load(f)
                     saved_theme = settings.get("theme", "dark")
+                    saved_lang = settings.get("lang", "kr")
                     self.current_theme = saved_theme
                     self.theme_var.set(saved_theme)
                     ctk.set_appearance_mode(saved_theme)
+                    self.current_lang = saved_lang
+                    self.lang_var.set(saved_lang)
             else:
-                # 기본 설정
                 self.current_theme = "dark"
                 self.theme_var.set("dark")
                 ctk.set_appearance_mode("dark")
+                self.current_lang = "kr"
+                self.lang_var.set("kr")
         except Exception as e:
             print(f"설정 로드 중 오류: {e}")
             self.current_theme = "dark"
             self.theme_var.set("dark")
             ctk.set_appearance_mode("dark")
+            self.current_lang = "kr"
+            self.lang_var.set("kr")
 
     def load_existing_data(self):
-        """기존 데이터 파일 로드"""
+        """CSV 파일에서 기존 데이터 로드 (name 없이)"""
         try:
-            if os.path.exists(self.data_file):
-                with open(self.data_file, "r", encoding="utf-8") as f:
-                    saved_data = json.load(f)
-                # 저장된 데이터를 배너별로 복원
+            csv_path = "data.csv"
+            if os.path.exists(csv_path):
+                import pandas as pd
+                df = pd.read_csv(csv_path)
+                # 컬럼명 강제 지정
+                df.columns = [c.strip().lower() for c in df.columns]
+                # 기존 데이터 초기화
+                for banner_id in self.banner_data:
+                    self.banner_data[banner_id]["data"] = []
+                # 각 row를 객체로 변환
+                for _, row in df.iterrows():
+                    banner_id = str(row.get("banner", "1"))
+                    item_obj = type('GachaItem', (), {})()
+                    item_obj.uid = str(row.get("uid", ""))
+                    item_obj.id = str(row.get("id", ""))
+                    item_obj.rank = int(row.get("rarity", 3))
+                    item_obj.time = str(row.get("time", ""))
+                    item_obj.gacha_type = str(row.get("type", ""))
+                    item_obj.manual = row.get("manual", False)
+                    if banner_id in self.banner_data:
+                        self.banner_data[banner_id]["data"].append(item_obj)
                 for banner_id in self.banner_data.keys():
-                    if banner_id in saved_data:
-                        raw_data = saved_data[banner_id]["data"]
-                        converted_data = []
-                        for item_dict in raw_data:
-                            item_obj = type('GachaItem', (), {})()
-                            item_obj.name = item_dict.get("name", "")
-                            item_obj.rank = item_dict.get("rank", 3)
-                            item_obj.time = item_dict.get("time", "")
-                            item_obj.type = item_dict.get("type", "")
-                            converted_data.append(item_obj)
-                        self.banner_data[banner_id]["data"] = converted_data
-                        self._calculate_banner_stats(banner_id)
-                # UI 업데이트
-                for banner_id in self.banner_data.keys():
+                    self._calculate_banner_stats(banner_id)
                     if self.banner_data[banner_id]["data"]:
                         self._update_banner_display(banner_id)
                 self._update_summary_display()
             else:
-                self.save_data_to_file()
+                self.save_data_to_file()  # 최초 실행 시 빈 파일 생성
         except Exception as e:
-            print(f"❌ 데이터 로드 실패: {str(e)}")
+            print(f"❌ CSV 데이터 로드 실패: {str(e)}")
             self.save_data_to_file()
 
     def save_data_to_file(self):
-        """현재 데이터를 파일에 저장"""
+        """현재 데이터를 data.csv로 저장 (CSV 포맷, name 없이)"""
         try:
-            save_data = {}
+            rows = []
             for banner_id, banner_info in self.banner_data.items():
-                serializable_data = []
                 for item in banner_info["data"]:
-                    item_dict = {
-                        "name": getattr(item, 'name', ''),
-                        "rank": getattr(item, 'rank', 3),
+                    # uid, id, rarity, time, banner, type, manual
+                    rows.append({
+                        "uid": getattr(item, 'uid', ''),
+                        "id": getattr(item, 'id', ''),
+                        "rarity": getattr(item, 'rank', 3),
                         "time": str(getattr(item, 'time', '')),
-                        "type": getattr(item, 'type', '')
-                    }
-                    serializable_data.append(item_dict)
-                save_data[banner_id] = {
-                    "name": banner_info["name"],
-                    "data": serializable_data,
-                    "stats": banner_info.get("stats", {})
-                }
-            with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump(save_data, f, ensure_ascii=False, indent=2)
+                        "banner": banner_id,
+                        "type": getattr(item, 'gacha_type', ''),
+                        "manual": getattr(item, 'manual', False)
+                    })
+            if rows:
+                import pandas as pd
+                df = pd.DataFrame(rows)
+                df.to_csv("data.csv", index=False, encoding="utf-8-sig", columns=["uid","id","rarity","time","banner","type","manual"])
+            else:
+                import pandas as pd
+                pd.DataFrame(columns=["uid","id","rarity","time","banner","type","manual"]).to_csv("data.csv", index=False, encoding="utf-8-sig")
         except Exception as e:
-            print(f"❌ 데이터 저장 실패: {str(e)}")
+            print(f"❌ CSV 데이터 저장 실패: {str(e)}")
 
     def close_settings(self):
         """설정 창 닫기"""
