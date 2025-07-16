@@ -48,7 +48,7 @@ class ModernGachaViewer:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("로컬 워프 트래커 V1.0.0")
-        self.root.geometry("700x1000")  # ← 창 크기(고정)
+        self.root.geometry("700x950")  # ← 창 크기(고정)
         self.root.resizable(False, False)  # ← 리사이즈 가능 여부
         
         # 윈도우 아이콘 설정
@@ -591,7 +591,7 @@ class ModernGachaViewer:
 
         # 기록 프레임 (중간)
         records_frame = ctk.CTkFrame(tab)
-        records_frame.pack(fill="both", expand=True, padx=10, pady=(0, 5))
+        records_frame.pack(fill="x", padx=10, pady=(0, 5))
 
         records_label = ctk.CTkLabel(
             records_frame,
@@ -602,11 +602,15 @@ class ModernGachaViewer:
 
         records_text = ctk.CTkTextbox(
             records_frame,
-            height=160,  # 가챠 기록 영역을 더 작게 (예: 160)
+            height=400,
             font=ctk.CTkFont(size=14)
         )
-        records_text.pack(fill="both", expand=True, padx=15, pady=(0, 5))
+        # pack 옵션에서 expand=True를 제거하고 fill="x"로 제한
+        records_text.pack(fill="x", padx=15, pady=(0, 5))
         records_text.configure(state="disabled")
+
+        # records_frame의 pack 옵션에서 expand=True도 제거
+        records_frame.pack(fill="x", padx=10, pady=(0, 5))
 
         self.banner_tabs[banner_id] = {
             "tab": tab,
