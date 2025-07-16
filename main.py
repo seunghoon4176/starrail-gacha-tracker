@@ -201,6 +201,16 @@ class ModernGachaViewer:
 
     def show_update_notice(self):
         """깃허브 릴리즈에서 공지(릴리즈 노트) 불러와서 표시"""
+        # 이미 창이 열려 있으면 기존 창을 앞으로 가져오고 새로 만들지 않음
+        if hasattr(self, "_update_notice_window") and self._update_notice_window is not None:
+            try:
+                if self._update_notice_window.winfo_exists():
+                    self._update_notice_window.lift()
+                    self._update_notice_window.focus_force()
+                    return
+            except Exception:
+                self._update_notice_window = None
+
         try:
             resp = requests.get(GITHUB_API, timeout=5)
             if resp.status_code == 200:
@@ -210,7 +220,7 @@ class ModernGachaViewer:
                 if latest_ver and latest_ver != CURRENT_VERSION:
                     msg = f"새 버전: {latest_ver}\n\n{body}"
                 else:
-                    msg = f"현재 최신 버전({CURRENT_VERSION})입니다.\n\n{body or '공지 없음'}"
+                    msg = f"현재 버전은({CURRENT_VERSION})입니다.\n\n{body or '공지 없음'}"
             else:
                 msg = "공지 불러오기 실패"
         except Exception as e:
@@ -219,6 +229,16 @@ class ModernGachaViewer:
         notice_win = ctk.CTkToplevel(self.root)
         notice_win.title("업데이트 공지")
         notice_win.geometry("520x420")
+        notice_win.transient(self.root)
+        notice_win.lift()
+        notice_win.focus_force()
+        # 창이 닫힐 때 변수 해제
+        def on_close():
+            self._update_notice_window = None
+            notice_win.destroy()
+        notice_win.protocol("WM_DELETE_WINDOW", on_close)
+        self._update_notice_window = notice_win
+
         try:
             icon_paths = [
                 resource_path("images/anaxa.ico"),
