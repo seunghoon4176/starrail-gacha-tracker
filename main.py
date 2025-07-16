@@ -547,7 +547,8 @@ class ModernGachaViewer:
 
         # 통계 프레임 (상단)
         stats_frame = ctk.CTkFrame(tab)
-        stats_frame.pack(fill="x", padx=10, pady=(10, 5))
+        # fill="both", expand=True로 변경하여 통계 영역이 최대한 확장되도록 함
+        stats_frame.pack(fill="both", expand=True, padx=10, pady=(10, 5))
 
         stats_label = ctk.CTkLabel(
             stats_frame,
@@ -556,8 +557,9 @@ class ModernGachaViewer:
         )
         stats_label.pack(anchor="w", padx=15, pady=(10, 2))
 
-        stats_text = ctk.CTkTextbox(stats_frame, height=180)  # 통계 영역을 크게 (예: 180)
-        stats_text.pack(fill="x", padx=15, pady=(0, 8))
+        # height를 크게 하고, fill="both", expand=True로 확장
+        stats_text = ctk.CTkTextbox(stats_frame, height=200)
+        stats_text.pack(fill="both", expand=True, padx=15, pady=(0, 8))
         stats_text.configure(state="disabled")
 
         # 페이지네이션 컨트롤 (통계와 기록 사이에 위치)
