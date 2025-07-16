@@ -181,3 +181,5 @@ cython_debug/
 .cursorindexingignore
 
 *.json
+
+venv_build/
