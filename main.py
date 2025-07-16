@@ -21,7 +21,7 @@ from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_lo
 from ErrorHandler import ErrorHandler
 from CacheFileManager import get_gacha_link_from_game_cache
 
-CURRENT_VERSION = "1.0.0"  # 실제 배포시 버전 문자열로 관리
+CURRENT_VERSION = "1.0.1"  # 실제 배포시 버전 문자열로 관리
 GITHUB_API = "https://api.github.com/repos/seunghoon4176/starrail-gacha-tracker/releases/latest"
 
 # Pydantic V2 호환성 경고 숨기기
