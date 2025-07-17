@@ -21,7 +21,7 @@ from GachaLinkFinder import get_gacha_link_from_registry, get_gacha_link_from_lo
 from ErrorHandler import ErrorHandler
 from CacheFileManager import get_gacha_link_from_game_cache
 
-CURRENT_VERSION = "1.0.1"  # 실제 배포시 버전 문자열로 관리
+CURRENT_VERSION = "1.0.2"  # 실제 배포시 버전 문자열로 관리
 GITHUB_API = "https://api.github.com/repos/seunghoon4176/starrail-gacha-tracker/releases/latest"
 
 # Pydantic V2 호환성 경고 숨기기
@@ -175,7 +175,7 @@ class ModernGachaViewer:
         notice_text.configure(state="disabled")
 
     def create_menu_bar(self):
-        """상단 메뉴바 생성 (기존 워프 트래커 불러오기/업데이트 공지/개발자 도와주기)"""
+        """상단 메뉴바 생성 (기존 워프 트래커 불러오기/업데이트 공지/개발자 문의)"""
         menubar = ctk.CTkFrame(self.root, height=28)
         menubar.pack(fill="x", padx=0, pady=(0, 2))
         # 기존 워프 트래커 불러오기 버튼
@@ -207,7 +207,18 @@ class ModernGachaViewer:
             font=ctk.CTkFont(size=13),
             command=lambda: webbrowser.open("https://open.kakao.com/o/sE05H3Vf")
         )
-        support_btn.pack(side="left", padx=(4, 8), pady=2)
+        support_btn.pack(side="left", padx=(4, 4), pady=2)
+
+        # 120 FPS 언락 버튼 추가
+        unlock_fps_btn = ctk.CTkButton(
+            menubar,
+            text="🎮 120 FPS 언락",
+            width=130,
+            height=24,
+            font=ctk.CTkFont(size=13),
+            command=self.unlock_120fps
+        )
+        unlock_fps_btn.pack(side="left", padx=(4, 8), pady=2)
 
     def show_update_notice(self):
         """깃허브 릴리즈에서 공지(릴리즈 노트) 불러와서 표시"""
@@ -1534,6 +1545,63 @@ class ModernGachaViewer:
         self.summary_text.delete("0.0", "end")
         self.summary_text.insert("0.0", summary)
         self.summary_text.configure(state="disabled")
+        
+    def unlock_120fps(self):
+        """Star Rail FPS 제한을 120으로 언락 (레지스트리 수정)"""
+        try:
+            import winreg
+            reg_path = r"Software\Cognosphere\Star Rail"
+            value_name_prefix = "GraphicsSettings_Model_"
+            # 하위 키에서 GraphicsSettings_Model_* 찾기
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ) as key:
+                i = 0
+                found_name = None
+                while True:
+                    try:
+                        name, val, typ = winreg.EnumValue(key, i)
+                        if name.startswith(value_name_prefix):
+                            found_name = name
+                            break
+                        i += 1
+                    except OSError:
+                        break
+            if not found_name:
+                messagebox.showerror("120 FPS 언락 실패", "GraphicsSettings_Model_* 값을 찾을 수 없습니다.\n게임 내 그래픽 설정을 '커스텀'으로 변경 후 다시 시도하세요.")
+                return
+            # 값 읽기
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+                val, typ = winreg.QueryValueEx(key, found_name)
+                if typ != winreg.REG_BINARY:
+                    messagebox.showerror("120 FPS 언락 실패", "알 수 없는 레지스트리 값 형식입니다.")
+                    return
+                # 바이너리 → bytearray
+                b = bytearray(val)
+                # ASCII로 변환해서 "FPS":60 찾기
+                s = b.decode("latin1")
+                import re
+                m = re.search(r'"FPS":(\d+)', s)
+                if not m:
+                    messagebox.showerror("120 FPS 언락 실패", '"FPS":60 값을 찾을 수 없습니다.')
+                    return
+                fps_val = m.group(1)
+                if fps_val == "120":
+                    messagebox.showinfo("120 FPS 언락", "이미 120 FPS로 설정되어 있습니다!")
+                    return
+                # 60 → 120 치환
+                s_new = s.replace(f'"FPS":{fps_val}', '"FPS":120', 1)
+                # 다시 바이너리로 변환
+                b_new = s_new.encode("latin1")
+                # 길이 맞추기 (PyInstaller 환경 호환)
+                if len(b_new) < len(b):
+                    b_new += b[len(b_new):]
+                elif len(b_new) > len(b):
+                    b_new = b_new[:len(b)]
+                # 레지스트리 값 쓰기
+                winreg.SetValueEx(key, found_name, 0, winreg.REG_BINARY, bytes(b_new))
+            messagebox.showinfo("120 FPS 언락 완료", "성공적으로 120 FPS로 설정했습니다!\n게임을 재시작하세요.\n(설정 메뉴에는 30으로 보일 수 있으나 실제로는 120 FPS로 동작합니다.)")
+        except Exception as e:
+            messagebox.showerror("120 FPS 언락 실패", f"오류 발생: {e}")
+
         
 if __name__ == "__main__":
     app = ModernGachaViewer()
