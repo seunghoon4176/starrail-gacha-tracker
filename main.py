@@ -47,7 +47,7 @@ def resource_path(relative_path):
 class ModernGachaViewer:
     def __init__(self):
         self.root = ctk.CTk()
-        self.root.title("로컬 워프 트래커 V1.0.1")
+        self.root.title("로컬 워프 트래커")
         self.root.geometry("700x950")  # ← 창 크기(고정)
         self.root.resizable(False, False)  # ← 리사이즈 가능 여부
         
