@@ -205,7 +205,7 @@ class ModernGachaViewer:
             width=150,
             height=24,
             font=ctk.CTkFont(size=13),
-            command=lambda: webbrowser.open("https://open.kakao.com/o/sE05H3Vf")
+            command=lambda: webbrowser.open("https://open.kakao.com/o/sObJJxJh")
         )
         support_btn.pack(side="left", padx=(4, 4), pady=2)
 
